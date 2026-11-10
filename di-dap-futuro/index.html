@@ -348,7 +348,11 @@ async function load() {
   const ts = S.mkt.ts ? new Date(S.mkt.ts) : null;
   const tstr = ts ? fdate(new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()))) + " " + String(ts.getHours()).padStart(2,"0") + ":" + String(ts.getMinutes()).padStart(2,"0") : "";
   $("live-dot").className = "dot " + (S.live ? "on" : "off");
-  $("live-txt").textContent = S.live ? "ao vivo · B3 " + tstr + " (atraso ~15 min)" : "cópia de " + tstr + " (B3 não respondeu)";
+  let aberto = false;
+  if (ts) { const hm = ts.getHours() * 60 + ts.getMinutes(); aberto = isBD(new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()))) && hm >= 540 && hm <= 1110; }
+  $("live-txt").textContent = S.live
+    ? (aberto ? "pregão aberto · B3 consultada às " + tstr.slice(-5) + " (atraso ~15 min)" : "pregão fechado · últimos negócios do dia · consultado em " + tstr)
+    : "cópia de " + tstr + " (B3 não respondeu)";
   if (S.cdiMode === "atual" || S.cdi == null) S.cdi = S.mkt.cdi;
   render(true);
 }
