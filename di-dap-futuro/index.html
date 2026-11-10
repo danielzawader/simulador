@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Simulador DI Futuro e DAP Futuro</title>
+<meta name="description" content="Curva de DI1 e DAP da B3 ao vivo, notional por contrato, prazo em dias úteis e simulação de saída com carrego contra o CDI.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Mesmo visual do Simulador Tesouro Direto: uma coluna, cartões, cor de destaque verde. */
+:root {
+  --bg: #f3f5f4; --surface: #ffffff; --ink: #15211f; --muted: #5b6965; --line: #dbe2df;
+  --accent: #0d6b5c; --accent-soft: #d8ece7; --gold: #b7791f; --good: #0f7a4a; --bad: #b4372c;
+  --band: rgba(13, 107, 92, .14);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r: 14px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1514; --surface: #172120; --ink: #e8efed; --muted: #9aaba6; --line: #2a3735;
+    --accent: #4fc2a9; --accent-soft: #1d3a34; --gold: #e3a94a; --good: #5fd29a; --bad: #f08a7e;
+    --band: rgba(79, 194, 169, .16); color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; display: flex; flex-direction: column; gap: 20px; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; align-self: flex-start; max-width: 100%; overflow-x: auto; }
+.tabs a { font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; padding: 7px 14px; border-radius: 999px; white-space: nowrap; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { background: var(--ink); color: var(--bg); }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.live { display: inline-flex; align-items: center; gap: 5px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.on { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.dot.off { background: var(--gold); }
+.linkbtn { font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 7vw, 40px); line-height: 1.08; margin: 4px 0 8px; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 21px; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lead { color: var(--muted); max-width: 62ch; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.fact { background: var(--surface); padding: 12px 14px; min-width: 0; }
+.fact .k { font-size: 12px; color: var(--muted); }
+.fact .v { font-family: var(--font-display); font-size: clamp(18px, 4.6vw, 24px); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fact .v.acc { color: var(--accent); }
+.fact .s { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .facts { grid-template-columns: 1fr 1fr; } .fact:first-child { grid-column: 1 / -1; } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.note { font-size: 13px; color: var(--muted); }
+.lbl { font-size: 13px; font-weight: 600; }
+.headrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mats { display: flex; flex-wrap: wrap; gap: 6px; }
+.mats button { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 6px 10px; cursor: pointer; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; min-width: 66px; }
+.mats button small { font-size: 11px; font-weight: 500; color: var(--muted); }
+.mats button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.mats button[aria-pressed="true"] small { color: var(--accent); }
+.seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; align-self: flex-start; flex-wrap: wrap; }
+.seg button { font: inherit; font-size: 13px; font-weight: 600; border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chart { position: relative; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.tip { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.14); padding: 6px 10px; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip .d { color: var(--muted); font-size: 12px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 3px; border-radius: 2px; background: var(--accent); display: inline-block; }
+.sw.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 4px, transparent 4px 7px); }
+.sw.circ { width: 10px; height: 10px; border-radius: 50%; background: var(--band); border: 1.5px solid var(--accent); }
+.ctrls { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; }
+@media (max-width: 560px) { .ctrls { grid-template-columns: 1fr; } }
+.ctrl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lblrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lblrow label { font-size: 13px; font-weight: 600; }
+.numin { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.numin input { font: inherit; color: inherit; width: 4.6em; text-align: right; padding: 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-variant-numeric: tabular-nums; }
+.numin input.w { width: 5.6em; }
+.numin input:hover { border-color: var(--accent); }
+.numin input[aria-invalid="true"] { border-color: var(--bad); color: var(--bad); }
+.hint { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: inherit; font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 4px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.chips button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.pnl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.part { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; background: var(--bg); }
+.part .k, .tot .k { font-size: 13px; font-weight: 600; color: var(--ink); }
+.part .kk { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.pv { font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 6vw, 30px); line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pp { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tot { grid-column: 1 / -1; border-radius: 12px; padding: 14px 16px; background: var(--ink); color: var(--bg); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.tot .k { color: var(--bg); opacity: .8; width: 100%; }
+.tv { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 8vw, 38px); line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tp { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .85; }
+@media (max-width: 560px) {
+  .pnl { grid-template-columns: 1fr; }
+  .part { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: baseline; }
+  .part .k { grid-column: 1; grid-row: 1; }
+  .part .pv { grid-column: 2; grid-row: 1 / span 2; text-align: right; align-self: center; font-size: clamp(20px, 6vw, 26px); }
+  .part .pp { grid-column: 1; grid-row: 2; font-size: 14px; }
+  .part .kk { grid-column: 1 / -1; grid-row: 3; }
+}
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
+.tot .pos, .tot .neg { color: inherit; }
+.rows { display: flex; flex-direction: column; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; font-variant-numeric: tabular-nums; }
+.row:last-child { border-bottom: 0; }
+.row .l { color: var(--muted); }
+.row span:last-child { white-space: nowrap; text-align: right; }
+.tblwrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th { text-align: right; font-size: 12px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+tr.sel td { background: var(--accent-soft); font-weight: 600; }
+tr.clk { cursor: pointer; }
+tr.clk:hover td { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+@media (max-width: 480px) { .c-x { display: none; } th, td { padding-inline: 5px; } table { font-size: 13px; } }
+ul.prem { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
+ul.prem b { color: var(--ink); font-weight: 600; }
+.foot { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="tabs" aria-label="Simuladores">
+    <a href="https://danielzawader.github.io/simulador-tesouro-direto/">Tesouro Direto</a>
+    <a href="#di1" data-c="DI1">DI Futuro</a>
+    <a href="#dap" data-c="DAP">DAP Futuro</a>
+  </nav>
+
+  <header>
+    <div class="eyebrow"><span id="e-prod">B3 · Futuro de DI (DI1)</span><span class="live"><span class="dot" id="live-dot"></span><span id="live-txt">carregando…</span></span><button class="linkbtn" id="btn-refresh" type="button">Atualizar</button></div>
+    <h1 id="h-title">Simulador DI Futuro</h1>
+    <p class="lead" id="lead">Escolha um vencimento negociado na B3, monte a posição em número de contratos e simule o resultado de zerar antes do vencimento: o carrego contra o CDI mais o efeito da variação da taxa.</p>
+  </header>
+
+  <section class="card" aria-labelledby="h-pick">
+    <div class="headrow">
+      <h2 id="h-pick">Vencimento</h2>
+      <div class="seg" role="group" aria-label="Filtro de liquidez">
+        <button type="button" data-liq="1" aria-pressed="true">Líquidos</button>
+        <button type="button" data-liq="0" aria-pressed="false">Todos</button>
+      </div>
+    </div>
+    <div class="mats" id="mats" role="group" aria-label="Vencimento"></div>
+    <p class="note" id="liq-note"></p>
+    <div class="facts">
+      <div class="fact"><div class="k">Taxa agora</div><div class="v acc" id="c-taxa">—</div><div class="s" id="c-taxa-s"></div></div>
+      <div class="fact"><div class="k">PU</div><div class="v" id="c-pu">—</div><div class="s" id="c-pu-s"></div></div>
+      <div class="fact"><div class="k">Vencimento</div><div class="v" id="c-venc">—</div><div class="s" id="c-venc-s"></div></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-curva">
+    <h2 id="h-curva">Curva de juros</h2>
+    <div class="chart" id="chart"><div class="tip" id="tip" hidden></div></div>
+    <div class="legend"><span><i class="sw"></i>Taxa agora</span><span><i class="sw dash"></i>Ajuste anterior</span><span><i class="sw circ"></i>Tamanho = contratos negociados hoje</span></div>
+    <div class="tblwrap"><table id="tbl"><thead><tr><th>Contrato</th><th>Taxa</th><th>Var. (bps)</th><th class="c-x">Dias úteis</th><th>Negociados</th><th class="c-x">Em aberto</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-pos">
+    <h2 id="h-pos">Posição</h2>
+    <div class="seg" role="group" aria-label="Lado da posição">
+      <button type="button" data-side="-1" aria-pressed="true">Tomado (compra taxa)</button>
+      <button type="button" data-side="1" aria-pressed="false">Dado (vende taxa)</button>
+    </div>
+    <div class="ctrls">
+      <div class="ctrl">
+        <div class="lblrow"><label for="n-in">Contratos</label><span class="numin"><input id="n-in" class="w" inputmode="numeric" value="10" aria-label="Número de contratos"></span></div>
+        <div class="chips" id="n-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="r0">Taxa de entrada</label><span class="numin"><input id="r0-in" inputmode="decimal" aria-label="Taxa de entrada em % ao ano">%</span></div>
+        <input type="range" id="r0" step="0.005">
+        <div class="hint" id="r0-hint"></div>
+      </div>
+    </div>
+    <div class="rows" id="pos-rows"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-sim">
+    <h2 id="h-sim">Simular a saída</h2>
+    <div class="ctrls">
+      <div class="ctrl">
+        <div class="lblrow"><label for="h">Ficar posicionado por</label><span class="numin"><input id="h-in" inputmode="numeric" aria-label="Dias úteis até a saída"><small style="font-size:13px">du</small></span></div>
+        <input type="range" id="h" min="1" step="1">
+        <div class="hint" id="h-hint"></div>
+        <div class="chips" id="h-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="r1">Taxa na saída</label><span class="numin"><input id="r1-in" inputmode="decimal" aria-label="Taxa de saída em % ao ano">%</span></div>
+        <input type="range" id="r1" step="0.005">
+        <div class="hint" id="r1-hint"></div>
+        <div class="chips" id="r1-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="cdi">CDI no período</label><span class="numin"><input id="cdi-in" inputmode="decimal" aria-label="CDI ao ano no período">%</span></div>
+        <input type="range" id="cdi" min="2" max="25" step="0.05">
+        <div class="chips" id="cdi-chips"></div>
+      </div>
+      <div class="ctrl" id="ipca-ctrl" hidden>
+        <div class="lblrow"><label for="ipca">IPCA no período</label><span class="numin"><input id="ipca-in" inputmode="decimal" aria-label="IPCA ao ano no período">%</span></div>
+        <input type="range" id="ipca" min="0" max="15" step="0.05">
+        <div class="chips" id="ipca-chips"></div>
+      </div>
+    </div>
+
+    <div class="pnl">
+      <div class="part"><div class="k">Carrego</div><div class="pv" id="o-carry">—</div><div class="pp" id="o-carry-p"></div><div class="kk" id="o-carry-k"></div></div>
+      <div class="part"><div class="k">Variação da taxa</div><div class="pv" id="o-mtm">—</div><div class="pp" id="o-mtm-p"></div><div class="kk" id="o-mtm-k"></div></div>
+      <div class="tot"><div class="k">Resultado na saída (soma dos ajustes diários)</div><div class="tv" id="o-tot">—</div><div class="tp" id="o-tot-p"></div></div>
+    </div>
+    <div class="rows" id="sim-rows"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-cen">
+    <h2 id="h-cen">Cenários de taxa na saída</h2>
+    <p class="note" id="cen-note"></p>
+    <div class="tblwrap"><table id="cen"><thead><tr><th>Taxa na saída</th><th>Choque</th><th class="c-x">Carrego</th><th class="c-x">Variação</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-prem">
+    <h2 id="h-prem">Como a conta é feita</h2>
+    <ul class="prem" id="prem"></ul>
+    <p class="foot" id="foot"></p>
+  </section>
+</div>
+
+<script>
+"use strict";
+// Cópia das cotações (usada se a B3 não responder). Formato: sufixo,ajuste anterior,última,negociados,em aberto
+const SNAP = {
+  ts: "2026-11-09T17:46:58",
+  cdi: 13.65, cdiData: "06/11/2026", selic: 13.75,
+  ipcaIdx: 7695.82, ipcaMes: "202609",
+  DI1: "Z26,13.65,13.649,49350,2122764;F27,13.66,13.659,276606,8269881;G27,13.683,13.679,48825,461027;H27,13.715,13.71,19191,482719;J27,13.765,13.755,300775,2682329;K27,13.809,13.785,5981,370105;M27,13.87,13.84,6311,155456;N27,13.937,13.91,180764,2969686;Q27,13.993,14.005,1124,117874;U27,14.045,13.995,813,87546;V27,14.1,14.06,46761,1314801;X27,14.135,14.08,2080,133265;Z27,14.175,14.135,2215,126045;F28,14.224,14.18,359244,5057908;J28,14.35,14.3,15496,600608;N28,14.443,14.395,50072,971119;V28,14.518,14.47,14296,634542;X28,14.544,14.485,349,35368;Z28,14.564,14.515,2254,40929;F29,14.588,14.54,280161,3746946;J29,14.666,14.62,983,212137;N29,14.731,14.685,24238,2389464;V29,14.761,14.72,2678,154586;X29,14.768,14.72,100,15877;Z29,14.783,14.725,183,15857;F30,14.793,14.75,78581,1778630;J30,14.807,14.8,451,100773;N30,14.834,14.795,1379,152572;V30,14.834,14.81,271,67960;F31,14.871,14.83,183437,2867748;J31,14.885,14.885,104,89838;N31,14.911,14.865,459,72263;V31,14.922,14.885,392,38100;F32,14.947,14.91,129263,1438216;F33,14.994,14.955,41509,803012;F34,14.998,14.96,184,343934;F35,14.984,14.95,33840,792340;F36,14.947,14.905,220,113146;F37,14.936,14.89,7628,339091;F38,14.914,14.86,7,55082;F39,14.884,,,45800;F40,14.866,,,48734;F41,14.857,,,24622",
+  DAP: "X26,8.546,,,3627;Z26,7.336,,,7;F27,5.574,6.01,28,39054;G27,4.965,,,14;H27,4.927,,,44;J27,4.572,,,40;K27,4.633,4.68,9616,474373;F28,7.571,,,2876;Q28,7.453,7.4,21675,466397;K29,7.575,7.52,6997,340889;Q30,7.747,7.67,29154,444157;K31,7.742,7.685,11538,157152;Q32,7.788,7.72,3532,364029;K33,7.708,7.645,4442,263661;K35,7.694,7.62,8803,460200;K37,7.549,7.485,1533,148179;Q40,7.434,7.365,2529,177888;K45,7.387,7.35,300,23057;Q50,7.374,,,14711;K55,7.364,,,2457;Q60,7.37,,,2"
+};
+
+const PROD = {
+  DI1: { nome: "DI Futuro", sigla: "DI1", eyebrow: "B3 · Futuro de DI (DI1)", liqVol: 10000, liqOI: 1000000, def: "F28",
+    lead: "Escolha um vencimento negociado na B3, monte a posição em número de contratos e simule o resultado de zerar antes do vencimento: o carrego contra o CDI mais o efeito da variação da taxa." },
+  DAP: { nome: "DAP Futuro", sigla: "DAP", eyebrow: "B3 · Futuro de Cupom de IPCA (DAP)", liqVol: 1000, liqOI: 200000, def: "Q30",
+    lead: "O DAP negocia o juro real (cupom de IPCA). O notional anda com o IPCA, então o carrego compara juro real + inflação contra o CDI. Escolha um vencimento e simule a saída." }
+};
+const MES = "FGHJKMNQUVXZ";
+const MESN = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+// ---------- Calendário B3: feriados nacionais (sem pregão e sem DI) ----------
+function easter(y) { const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451); const mo=Math.floor((h+l-7*m+114)/31), da=((h+l-7*m+114)%31)+1; return new Date(Date.UTC(y,mo-1,da)); }
+const HOL = new Map();
+function holidays(y) {
+  if (HOL.has(y)) return HOL.get(y);
+  const s = new Set(), add = d => s.add(d.toISOString().slice(0,10)), fx = (m,d) => add(new Date(Date.UTC(y,m-1,d)));
+  fx(1,1); fx(4,21); fx(5,1); fx(9,7); fx(10,12); fx(11,2); fx(11,15); if (y >= 2024) fx(11,20); fx(12,25);
+  const e = easter(y).getTime(), D = 864e5;
+  [-48,-47,-2,60].forEach(k => add(new Date(e + k*D))); // carnaval (seg e ter), sexta-feira santa, Corpus Christi
+  HOL.set(y, s); return s;
+}
+const iso = d => d.toISOString().slice(0,10);
+const isBD = d => { const w = d.getUTCDay(); return w !== 0 && w !== 6 && !holidays(d.getUTCFullYear()).has(iso(d)); };
+const addDays = (d,n) => new Date(d.getTime() + n*864e5);
+function nextBD(d) { while (!isBD(d)) d = addDays(d,1); return d; }
+function addBD(d, n) { let x = d; while (n > 0) { x = addDays(x,1); if (isBD(x)) n--; } return x; }
+// dias úteis de a (inclusive) até b (exclusive)
+const DUC = new Map();
+function du(a, b) { const k = iso(a)+iso(b); if (DUC.has(k)) return DUC.get(k); let n = 0; for (let x = a; x < b; x = addDays(x,1)) if (isBD(x)) n++; DUC.set(k,n); return n; }
+function parseISO(s) { const [y,m,d] = s.split("-").map(Number); return new Date(Date.UTC(y,m-1,d)); }
+function matFromSym(c, suf) { // regra do contrato: DI1 = 1º dia útil do mês; DAP = dia 15 (ou próximo dia útil)
+  const m = MES.indexOf(suf[0]), y = 2000 + Number(suf.slice(1));
+  return nextBD(new Date(Date.UTC(y, m, c === "DI1" ? 1 : 15)));
+}
+function todaySP() { const p = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()); return parseISO(p); }
+
+// ---------- Formatação ----------
+const nf = (v,d=2) => v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct = (v,d=2) => nf(v,d) + "%";
+const brl = (v,d=0) => (v < 0 ? "−" : "") + "R$ " + nf(Math.abs(v),d);
+const sbrl = (v,d=0) => (v > 0 ? "+" : v < 0 ? "−" : "") + "R$ " + nf(Math.abs(v),d);
+const sgn = (v,d=1) => (v > 0 ? "+" : v < 0 ? "−" : "") + nf(Math.abs(v),d);
+const cls = v => v > 0.5 ? "pos" : v < -0.5 ? "neg" : "";
+const fdate = d => String(d.getUTCDate()).padStart(2,"0") + "/" + String(d.getUTCMonth()+1).padStart(2,"0") + "/" + d.getUTCFullYear();
+const mlabel = d => MESN[d.getUTCMonth()] + "/" + String(d.getUTCFullYear()).slice(2);
+const num = s => { const v = parseFloat(String(s).trim().replace(/\s|%/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",", ".")); return isFinite(v) ? v : NaN; };
+const $ = id => document.getElementById(id);
+
+// ---------- Estado ----------
+const S = {
+  prod: "DI1", liq: true, side: -1, n: 10, sel: { DI1: null, DAP: null },
+  r0: null, r0Touched: false, h: 63, r1: null, r1Mode: "same", cdi: null, cdiMode: "atual", ipca: 4.5, ipcaMode: "fixo",
+  mkt: null, live: false, ref: null
+};
+
+function buildMarket(raw) { // raw: { DI1:[{suf,mat,adj,cur,vol,oi}], DAP:[...], ts, cdi, ... }
+  const ref = nextBD(todaySP());
+  const out = { ts: raw.ts, cdi: raw.cdi, cdiData: raw.cdiData, selic: raw.selic, ipcaIdx: raw.ipcaIdx, ipcaMes: raw.ipcaMes, ref };
+  for (const c of ["DI1","DAP"]) {
+    out[c] = raw[c].filter(x => x.mat > ref && (isFinite(x.adj) || isFinite(x.cur))).map(x => {
+      const rate = isFinite(x.cur) ? x.cur : x.adj;
+      const d = du(ref, x.mat);
+      return { ...x, sym: c + x.suf, rate, has: isFinite(x.cur), d, pu: 1e5 / Math.pow(1 + rate/100, d/252), var: isFinite(x.cur) && isFinite(x.adj) ? (x.cur - x.adj)*100 : null };
+    }).filter(x => x.d > 0).sort((a,b) => a.d - b.d);
+    const P = PROD[c];
+    out[c].forEach(x => x.liq = (x.vol || 0) >= P.liqVol || (x.oi || 0) >= P.liqOI);
+  }
+  return out;
+}
+function parseSnap() {
+  const rows = (c) => SNAP[c].split(";").map(s => { const [suf,a,cu,v,o] = s.split(","); return { suf, mat: matFromSym(c, suf), adj: a===""?NaN:+a, cur: cu===""?NaN:+cu, vol: v===""?0:+v, oi: o===""?0:+o }; });
+  return { ts: SNAP.ts, cdi: SNAP.cdi, cdiData: SNAP.cdiData, selic: SNAP.selic, ipcaIdx: SNAP.ipcaIdx, ipcaMes: SNAP.ipcaMes, DI1: rows("DI1"), DAP: rows("DAP") };
+}
+
+async function fetchJSON(u, ms=9000) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); try { const r = await fetch(u, { signal: ac.signal, cache: "no-store" }); if (!r.ok) throw new Error(r.status); return await r.json(); } finally { clearTimeout(t); } }
+async function fetchLive() {
+  const base = "https://cotacao.b3.com.br/mds/api/v1/DerivativeQuotation/";
+  const [di, dap, cdi, selic, ipca] = await Promise.allSettled([
+    fetchJSON(base + "DI1"), fetchJSON(base + "DAP"),
+    fetchJSON("https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/1?formato=json"),
+    fetchJSON("https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/1?formato=json"),
+    fetchJSON("https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/2266/p/last%201")
+  ]);
+  if (di.status !== "fulfilled" || dap.status !== "fulfilled") throw new Error("B3 indisponível");
+  const conv = (j, c) => (j.Scty || []).filter(s => s.mkt && s.mkt.cd === "FUT" && s.symb && s.symb.length === 6).map(s => {
+    const q = s.SctyQtn || {}, a = (s.asset && s.asset.AsstSummry) || {}, suf = s.symb.slice(3);
+    return { suf, mat: a.mtrtyCode ? parseISO(a.mtrtyCode) : matFromSym(c, suf), adj: q.prvsDayAdjstmntPric ?? NaN, cur: q.curPrc ?? NaN, vol: a.traddCtrctsQty || 0, oi: a.opnCtrcts || 0 };
+  });
+  const raw = parseSnap();
+  raw.DI1 = conv(di.value, "DI1"); raw.DAP = conv(dap.value, "DAP");
+  raw.ts = (di.value.Msg && di.value.Msg.dtTm || "").replace(" ", "T") || null;
+  if (cdi.status === "fulfilled" && cdi.value[0]) { raw.cdi = num(cdi.value[0].valor); raw.cdiData = cdi.value[0].data; }
+  if (selic.status === "fulfilled" && selic.value[0]) raw.selic = num(selic.value[0].valor);
+  if (ipca.status === "fulfilled" && ipca.value[1]) { raw.ipcaIdx = num(ipca.value[1].V); raw.ipcaMes = ipca.value[1].D3C; }
+  if (!raw.DI1.length) throw new Error("sem dados");
+  return raw;
+}
+
+async function load() {
+  $("live-txt").textContent = "atualizando…";
+  try { S.mkt = buildMarket(await fetchLive()); S.live = true; }
+  catch (e) { if (!S.mkt || !S.live) { S.mkt = buildMarket(parseSnap()); S.live = false; } }
+  const ts = S.mkt.ts ? new Date(S.mkt.ts) : null;
+  const tstr = ts ? fdate(new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()))) + " " + String(ts.getHours()).padStart(2,"0") + ":" + String(ts.getMinutes()).padStart(2,"0") : "";
+  $("live-dot").className = "dot " + (S.live ? "on" : "off");
+  $("live-txt").textContent = S.live ? "ao vivo · B3 " + tstr + " (atraso ~15 min)" : "cópia de " + tstr + " (B3 não respondeu)";
+  if (S.cdiMode === "atual" || S.cdi == null) S.cdi = S.mkt.cdi;
+  render(true);
+}
+
+// ---------- Curva: interpolação flat-forward em dias úteis ----------
+function curveRate(c, d) {
+  const pts = S.mkt[c].filter(x => x.liq || x.has);
+  const p = pts.length >= 2 ? pts : S.mkt[c];
+  if (!p.length) return NaN;
+  if (d <= p[0].d) return p[0].rate;
+  for (let i = 1; i < p.length; i++) if (d <= p[i].d) {
+    const a = p[i-1], b = p[i], Fa = Math.pow(1+a.rate/100, a.d/252), Fb = Math.pow(1+b.rate/100, b.d/252);
+    const F = Fa * Math.pow(Fb/Fa, (d-a.d)/(b.d-a.d));
+    return (Math.pow(F, 252/d) - 1) * 100;
+  }
+  return p[p.length-1].rate;
+}
+function ipcaPR() { // IPCA pro rata: índice do último mês divulgado levado até hoje pela projeção (vale a partir do dia 15 do mês seguinte)
+  const m = S.mkt.ipcaMes, y = +m.slice(0,4), mo = +m.slice(4);
+  const start = nextBD(new Date(Date.UTC(mo === 12 ? y+1 : y, mo === 12 ? 0 : mo, 15)));
+  const n = start < S.mkt.ref ? du(start, S.mkt.ref) : 0;
+  return S.mkt.ipcaIdx * Math.pow(1 + S.ipca/100, n/252);
+}
+
+function current() { const list = S.mkt[S.prod]; return list.find(x => x.sym === S.sel[S.prod]) || null; }
+function visible() { const list = S.mkt[S.prod]; return S.liq ? list.filter(x => x.liq) : list; }
+
+// ---------- Cálculo ----------
+function calc(r0, r1, h, extra) {
+  const x = current(), isDAP = S.prod === "DAP", N = S.n, d0 = x.d;
+  const V0 = isDAP ? 0.00025 * ipcaPR() : 1; // valor do ponto em R$
+  const PU0 = 1e5 / Math.pow(1 + r0/100, d0/252);
+  const not0 = N * PU0 * V0;
+  const fC = Math.pow(1 + S.cdi/100, h/252), fI = isDAP ? Math.pow(1 + S.ipca/100, h/252) : 1;
+  const PU1 = h >= d0 ? 1e5 : 1e5 / Math.pow(1 + r1/100, (d0-h)/252);
+  const PUc = PU0 * Math.pow(1 + r0/100, h/252); // PU na saída se a taxa não mudar
+  const s = S.side; // +1 dado (comprado em PU), -1 tomado (vendido em PU)
+  const carry = s * not0 * (fI * Math.pow(1 + r0/100, h/252) - fC);
+  const mtm = s * N * V0 * fI * (PU1 - PUc);
+  const dv01 = N * V0 * (1e5 / Math.pow(1 + (r0-0.01)/100, d0/252) - PU0);
+  let be = NaN; if (h < d0) { const PUbe = PU0 * fC / fI; be = (Math.pow(1e5/PUbe, 252/(d0-h)) - 1) * 100; }
+  return { V0, PU0, PU1, not0, notEnd: N * PU1 * V0 * fI, carry, mtm, tot: carry + mtm, dv01, be, fC, fI };
+}
+
+// ---------- Renderização ----------
+function setPressed(sel, attr, val) { document.querySelectorAll(sel).forEach(b => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(val)))); }
+
+function render(reset) {
+  const P = PROD[S.prod], list = S.mkt[S.prod];
+  document.querySelectorAll(".tabs a[data-c]").forEach(a => { if (a.dataset.c === S.prod) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  document.title = "Simulador " + P.nome;
+  $("h-title").textContent = "Simulador " + P.nome; $("e-prod").textContent = P.eyebrow; $("lead").textContent = P.lead;
+  $("ipca-ctrl").hidden = S.prod !== "DAP";
+  setPressed("[data-liq]", "liq", S.liq ? 1 : 0); setPressed("[data-side]", "side", S.side);
+
+  let vis = visible();
+  if (!S.sel[S.prod] || !list.some(x => x.sym === S.sel[S.prod])) {
+    const def = list.find(x => x.sym === S.prod + P.def) || vis.reduce((a,b) => (b.vol > (a ? a.vol : -1) ? b : a), null) || list[0];
+    S.sel[S.prod] = def.sym; reset = true;
+  }
+  const x = current();
+  if (S.liq && !x.liq) vis = vis.concat([x]).sort((a,b) => a.d - b.d);
+  $("mats").innerHTML = vis.map(v => `<button type="button" data-sym="${v.sym}" aria-pressed="${v.sym === x.sym}">${v.suf}<small>${mlabel(v.mat)}</small></button>`).join("");
+  const nLiq = list.filter(v => v.liq).length;
+  $("liq-note").textContent = S.liq
+    ? `${nLiq} de ${list.length} vencimentos com liquidez: ${nf(P.liqVol,0)}+ contratos negociados hoje ou ${nf(P.liqOI,0)}+ em aberto.`
+    : `Todos os ${list.length} vencimentos listados. Os menos negociados podem estar com a taxa do ajuste anterior.`;
+
+  if (reset || !S.r0Touched) { S.r0 = x.rate; S.r0Touched = false; }
+  if (reset) { S.h = Math.min(S.h, x.d); if (S.h < 1) S.h = 1; }
+  if (S.r1Mode === "same" || S.r1 == null) S.r1 = S.r0;
+  if (S.r1Mode === "roll") S.r1 = S.h >= x.d ? S.r0 : curveRate(S.prod, x.d - S.h);
+  if (S.cdiMode === "curva") S.cdi = curveRate("DI1", S.h);
+  if (S.prod === "DAP" && S.ipcaMode === "impl") S.ipca = implInfl(x.d);
+
+  // fatos
+  $("c-taxa").textContent = pct(x.rate, 3);
+  $("c-taxa-s").innerHTML = x.has ? `ajuste ant. ${pct(x.adj,3)} · ${sgn(x.var,1)} bps no dia` : `ajuste anterior (sem negócio hoje)`;
+  $("c-pu").textContent = nf(x.pu, 2);
+  $("c-pu-s").textContent = S.prod === "DAP" ? `× R$ ${nf(0.00025*ipcaPR(),4)} por ponto` : "R$ 1,00 por ponto";
+  $("c-venc").textContent = fdate(x.mat);
+  $("c-venc-s").textContent = `${nf(x.d,0)} dias úteis · ${nf(x.d/252,2)} anos`;
+
+  // controles
+  const span = 3;
+  setRange("r0", S.r0, x.rate - span, x.rate + span);
+  $("r0-hint").textContent = S.r0Touched ? `Mercado: ${pct(x.rate,3)} · você está ${sgn((S.r0-x.rate)*100,1)} bps` : "Igual à taxa de agora. Digite outra se já está posicionado.";
+  $("n-in").value = nf(S.n, 0);
+  $("n-chips").innerHTML = [1,10,50,100,500].map(v => `<button type="button" data-n="${v}" class="${v===S.n?'on':''}">${v}</button>`).join("");
+
+  const hEl = $("h"); hEl.max = x.d; if (S.h > x.d) S.h = x.d; hEl.value = S.h; $("h-in").value = S.h;
+  const exitD = addBD(S.mkt.ref, S.h);
+  $("h-hint").textContent = S.h >= x.d ? `Até o vencimento (${fdate(x.mat)})` : `Saída em ${fdate(exitD)} · ${nf(S.h/21,1)} meses · faltarão ${nf(x.d-S.h,0)} du`;
+  const hOpts = [[1,"1 dia"],[21,"1 mês"],[63,"3 meses"],[126,"6 meses"],[252,"1 ano"],[x.d,"Vencimento"]].filter(([v],i,a) => v <= x.d && (i === a.length-1 || v < x.d));
+  $("h-chips").innerHTML = hOpts.map(([v,l]) => `<button type="button" data-h="${v}" class="${v===S.h?'on':''}">${l}</button>`).join("");
+
+  setRange("r1", S.r1, S.r0 - span, S.r0 + span);
+  const roll = S.h >= x.d ? NaN : curveRate(S.prod, x.d - S.h);
+  $("r1-chips").innerHTML = `<button type="button" data-r1="same" class="${S.r1Mode==='same'?'on':''}">Mesma da entrada</button>` +
+    (isFinite(roll) ? `<button type="button" data-r1="roll" class="${S.r1Mode==='roll'?'on':''}">Curva de hoje no prazo restante (${pct(roll,2)})</button>` : "") +
+    [-100,-50,50,100].map(b => `<button type="button" data-r1b="${b}">${b>0?"+":"−"}${Math.abs(b)} bps</button>`).join("");
+  $("r1-hint").textContent = S.h >= x.d ? "No vencimento o PU é 100.000 pontos; a taxa de saída não importa." : `${sgn((S.r1-S.r0)*100,1)} bps contra a entrada`;
+  $("r1").disabled = $("r1-in").disabled = S.h >= x.d;
+
+  $("cdi").value = S.cdi; setNum("cdi-in", S.cdi, 2);
+  const cdiCurva = curveRate("DI1", S.h);
+  $("cdi-chips").innerHTML = `<button type="button" data-cdi="atual" class="${S.cdiMode==='atual'?'on':''}">CDI atual ${pct(S.mkt.cdi,2)}</button><button type="button" data-cdi="curva" class="${S.cdiMode==='curva'?'on':''}">Implícito na curva de DI (${pct(cdiCurva,2)})</button>`;
+  if (S.prod === "DAP") {
+    $("ipca").value = S.ipca; setNum("ipca-in", S.ipca, 2);
+    const ii = implInfl(x.d);
+    $("ipca-chips").innerHTML = `<button type="button" data-ipca="impl" class="${S.ipcaMode==='impl'?'on':''}">Implícita DI × DAP ${pct(ii,2)}</button>` + [3.5,4.5,5.5].map(v => `<button type="button" data-ipcav="${v}" class="${S.ipcaMode==='fixo'&&Math.abs(S.ipca-v)<1e-9?'on':''}">${pct(v,1)}</button>`).join("");
+  }
+
+  const R = calc(S.r0, S.r1, S.h);
+  // posição
+  const posRows = [
+    ["Notional (" + nf(S.n,0) + (S.n===1?" contrato":" contratos") + ")", brl(R.not0)],
+    ["PU de entrada", nf(R.PU0, 2) + " pts"],
+    [S.prod === "DAP" ? `Valor do ponto (0,00025 × IPCA ${nf(ipcaPR(),2)})` : "Valor do ponto", S.prod === "DAP" ? `R$ ${nf(R.V0,4)}` : "R$ 1,00"],
+    ["Valor no vencimento", brl(S.n * 1e5 * R.V0 * (S.prod==="DAP" ? Math.pow(1+S.ipca/100, x.d/252) : 1)) + (S.prod==="DAP" ? " (com IPCA)" : "")],
+    ["DV01 (R$ por 1 bp de taxa)", brl(R.dv01, 2)],
+    [S.side < 0 ? "Ganha se a taxa" : "Ganha se a taxa", S.side < 0 ? "subir (tomado)" : "cair (dado)"]
+  ];
+  if (S.prod === "DAP") posRows.splice(4, 0, ["Inflação implícita (DI × DAP)", pct(implInfl(x.d),2) + " a.a."]);
+  else posRows.splice(4, 0, ["Taxa × CDI atual", sgn((S.r0 - S.mkt.cdi)*100,0) + " bps"]);
+  $("pos-rows").innerHTML = posRows.map(([l,v]) => `<div class="row"><span class="l">${l}</span><span>${v}</span></div>`).join("");
+
+  // resultado
+  const pr = v => sgn(v / R.not0 * 100, 2) + "% do notional";
+  out("o-carry", R.carry); $("o-carry-p").textContent = pr(R.carry);
+  $("o-carry-k").textContent = carryText(R);
+  out("o-mtm", R.mtm); $("o-mtm-p").textContent = pr(R.mtm);
+  $("o-mtm-k").textContent = S.h >= x.d ? "No vencimento não há risco de taxa: tudo vira carrego." : `${sgn((S.r1-S.r0)*100,1)} bps × DV01 no prazo restante`;
+  $("o-tot").textContent = sbrl(R.tot); $("o-tot").className = "tv"; $("o-tot-p").textContent = `${pr(R.tot)} · ${sbrl(R.tot/S.n)} por contrato`;
+  const simRows = [
+    ["Saída", S.h >= x.d ? "no vencimento" : `${fdate(exitD)} (${nf(S.h,0)} du)`],
+    ["PU na saída", nf(R.PU1,2) + " pts"],
+    ["Notional na saída", brl(R.notEnd)],
+    ["Taxa de saída que zera o resultado", isFinite(R.be) ? pct(R.be,3) + ` (${sgn((R.be-S.r0)*100,1)} bps)` : "—"],
+    ["Carrego por dia útil", sbrl(R.carry / S.h, 0)]
+  ];
+  $("sim-rows").innerHTML = simRows.map(([l,v]) => `<div class="row"><span class="l">${l}</span><span>${v}</span></div>`).join("");
+
+  // cenários
+  const base = S.r0, shocks = [-200,-100,-50,-25,0,25,50,100,200];
+  $("cen-note").textContent = S.h >= x.d ? "Levando até o vencimento o resultado não depende da taxa de saída." : `Saindo em ${nf(S.h,0)} dias úteis, com CDI de ${pct(S.cdi)}${S.prod==="DAP"?" e IPCA de "+pct(S.ipca):""}. Clique numa linha para usar a taxa.`;
+  $("cen").querySelector("tbody").innerHTML = (S.h >= x.d ? [0] : shocks).map(b => {
+    const r1 = base + b/100, c = calc(S.r0, r1, S.h); const sel = Math.abs(r1 - S.r1) < 1e-6;
+    return `<tr class="clk${sel?' sel':''}" data-r1v="${r1}"><td>${pct(r1,3)}</td><td>${b===0?"0":sgn(b,0)} bps</td><td class="c-x ${cls(c.carry)}">${sbrl(c.carry)}</td><td class="c-x ${cls(c.mtm)}">${sbrl(c.mtm)}</td><td class="${cls(c.tot)}"><b>${sbrl(c.tot)}</b></td></tr>`;
+  }).join("");
+
+  // tabela da curva
+  $("tbl").querySelector("tbody").innerHTML = vis.map(v => `<tr class="clk${v.sym===x.sym?' sel':''}" data-sym="${v.sym}"><td>${v.sym}</td><td>${pct(v.rate,3)}</td><td>${v.var==null?"—":sgn(v.var,1)}</td><td class="c-x">${nf(v.d,0)}</td><td>${nf(v.vol||0,0)}</td><td class="c-x">${nf(v.oi||0,0)}</td></tr>`).join("");
+
+  drawChart(vis, x);
+  premissas();
+}
+function implInfl(d) { const di = curveRate("DI1", d), dap = curveRate("DAP", d); return ((1+di/100)/(1+dap/100) - 1) * 100; }
+function carryText(R) {
+  const x = current();
+  if (S.prod === "DAP") {
+    const nom = ((1+S.r0/100)*(1+S.ipca/100) - 1) * 100;
+    return `Juro real ${pct(S.r0,2)} + IPCA ${pct(S.ipca,2)} = ${pct(nom,2)} nominal contra CDI ${pct(S.cdi,2)} (${S.side<0?"tomado paga":"dado recebe"} o juro e ${S.side<0?"recebe":"paga"} o CDI)`;
+  }
+  return `Taxa ${pct(S.r0,3)} contra CDI ${pct(S.cdi,2)}: ${S.side<0?"tomado recebe CDI e paga a taxa":"dado recebe a taxa e paga CDI"}`;
+}
+function out(id, v) { const el = $(id); el.textContent = sbrl(v); el.className = "pv " + cls(v); }
+function setNum(id, v, d) { const el = $(id); if (document.activeElement !== el) { el.value = nf(v, d); el.removeAttribute("aria-invalid"); } }
+function setRange(id, v, lo, hi) { const el = $(id); el.min = Math.min(lo, v).toFixed(3); el.max = Math.max(hi, v).toFixed(3); el.value = v; setNum(id + "-in", v, 3); }
+
+function premissas() {
+  const isDAP = S.prod === "DAP";
+  const items = [
+    `<b>Preço:</b> PU = 100.000 ÷ (1 + taxa)<sup>du/252</sup>. ${isDAP ? "No DAP cada ponto vale R$ 0,00025 × IPCA pro rata (índice de " + S.mkt.ipcaMes.slice(4) + "/" + S.mkt.ipcaMes.slice(0,4) + " = " + nf(S.mkt.ipcaIdx,2) + ", corrigido pela projeção até hoje)." : "No DI1 cada ponto vale R$ 1,00."} Notional = contratos × PU × valor do ponto.`,
+    `<b>Prazo:</b> dias úteis da data de referência (${fdate(S.mkt.ref)}, inclusive) até o vencimento (exclusive), pelo calendário de feriados nacionais que a B3 usa (inclui Carnaval, Sexta-feira Santa, Corpus Christi e 20/11). Vencimento ${isDAP ? "no dia 15 do mês (ou dia útil seguinte)" : "no 1º dia útil do mês"}.`,
+    `<b>Taxa agora:</b> último negócio na B3; sem negócio no dia, vale o ajuste anterior. Os "líquidos" são os vencimentos com ${nf(PROD[S.prod].liqVol,0)}+ contratos negociados hoje ou ${nf(PROD[S.prod].liqOI,0)}+ em aberto, para valer também logo na abertura.`,
+    `<b>Ajuste diário:</b> a posição é corrigida todo dia pelo CDI${isDAP ? " e pelo IPCA pro rata" : ""}. Somando os ajustes até a saída, o resultado de quem está dado (comprado em PU) = PU de saída × ponto${isDAP ? " × inflação do período" : ""} − PU de entrada × ponto × CDI acumulado. Tomado é o inverso.`,
+    `<b>Carrego:</b> o resultado se a taxa não mudar até a saída. Positivo para o dado quando ${isDAP ? "juro real + IPCA supera" : "a taxa contratada supera"} o CDI do período; para o tomado, o contrário. O CDI padrão é o atual (${pct(S.mkt.cdi,2)}, BCB, ${S.mkt.cdiData}); "implícito na curva" usa o DI futuro para o mesmo prazo.`,
+    `<b>Fica de fora:</b> reinvestimento ou custo de financiar os ajustes diários, margem, corretagem, emolumentos e IR. É uma simulação, não recomendação.`
+  ];
+  $("prem").innerHTML = items.map(t => `<li>${t}</li>`).join("");
+  $("foot").textContent = `Fontes: B3 (cotações de DI1 e DAP), Banco Central (CDI e Selic meta ${pct(S.mkt.selic,2)}), IBGE (IPCA). As cotações são buscadas pelo seu navegador quando a página abre e a cada 5 minutos.`;
+}
+
+// ---------- Gráfico ----------
+function drawChart(vis, x) {
+  const el = $("chart"), W = Math.max(280, el.clientWidth || 640), H = Math.round(Math.min(320, Math.max(230, W * 0.5)));
+  const m = { l: 46, r: 12, t: 12, b: 28 };
+  const pts = vis;
+  const ys = pts.flatMap(p => [p.rate, isFinite(p.adj) ? p.adj : p.rate]);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys); const pad = Math.max(0.1, (y1-y0)*0.12); y0 -= pad; y1 += pad;
+  const x1 = Math.max(...pts.map(p => p.d/252)) * 1.03;
+  const X = v => m.l + v/x1 * (W - m.l - m.r), Y = v => m.t + (y1 - v)/(y1 - y0) * (H - m.t - m.b);
+  const step = niceStep((y1-y0)/4); const ticks = []; for (let v = Math.ceil(y0/step)*step; v <= y1; v += step) ticks.push(v);
+  const xs = x1 > 12 ? 5 : x1 > 5 ? 2 : x1 > 2 ? 1 : 0.5; const xt = []; for (let v = 0; v <= x1; v += xs) xt.push(v);
+  const maxV = Math.max(1, ...pts.map(p => p.vol || 0));
+  const line = (f) => pts.filter(p => isFinite(f(p))).map((p,i) => (i?"L":"M") + X(p.d/252).toFixed(1) + "," + Y(f(p)).toFixed(1)).join("");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Curva de ${PROD[S.prod].nome}: taxa por prazo">`;
+  s += ticks.map(v => `<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${nf(v, step < 0.1 ? 2 : 1)}%</text>`).join("");
+  s += xt.map(v => `<text x="${X(v)}" y="${H-8}" text-anchor="middle">${v===0?"":nf(v, v%1?1:0)+"a"}</text>`).join("");
+  s += `<path d="${line(p => p.adj)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  s += `<path d="${line(p => p.rate)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
+  s += pts.map(p => { const r = 2.5 + 9 * Math.sqrt((p.vol||0)/maxV); const on = p.sym === x.sym;
+    return `<circle cx="${X(p.d/252)}" cy="${Y(p.rate)}" r="${on ? Math.max(r,6) : r}" fill="${on ? 'var(--accent)' : 'var(--band)'}" stroke="var(--accent)" stroke-width="${on?2:1.2}"/>`; }).join("");
+  s += `<line id="hair" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/></svg>`;
+  el.querySelectorAll("svg").forEach(n => n.remove()); el.insertAdjacentHTML("afterbegin", s);
+  const svg = el.querySelector("svg"), tip = $("tip"), hair = svg.querySelector("#hair");
+  const near = ev => { const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width; let best = null, bd = 1e9; pts.forEach(p => { const d = Math.abs(X(p.d/252) - px); if (d < bd) { bd = d; best = p; } }); return { p: best, r }; };
+  svg.onpointermove = ev => { const { p, r } = near(ev); if (!p) return; const cx = X(p.d/252);
+    hair.setAttribute("x1", cx); hair.setAttribute("x2", cx); hair.setAttribute("visibility", "visible");
+    tip.hidden = false; tip.innerHTML = `<b>${p.sym}</b> · ${pct(p.rate,3)}<div class="d">${fdate(p.mat)} · ${nf(p.d,0)} du · ${nf(p.vol||0,0)} negociados</div>`;
+    const tx = cx * r.width / W, tw = tip.offsetWidth; tip.style.transform = `translate(${Math.min(Math.max(0, tx - tw/2), r.width - tw)}px, ${Math.max(0, Y(p.rate) * r.height / H - 58)}px)`; };
+  svg.onpointerleave = () => { tip.hidden = true; hair.setAttribute("visibility", "hidden"); };
+  svg.onclick = ev => { const { p } = near(ev); if (p) pick(p.sym); };
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2.5 : f < 7.5 ? 5 : 10) * p; }
+
+// ---------- Eventos ----------
+function pick(sym) { S.sel[S.prod] = sym; S.r0Touched = false; if (S.r1Mode !== "roll") S.r1Mode = "same"; render(true); }
+function setProd(c, push) { if (!PROD[c]) return; S.prod = c; S.r0Touched = false; S.r1Mode = "same"; if (push) history.replaceState(null, "", "#" + c.toLowerCase()); render(true); }
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("button, a[data-c], tr.clk"); if (!t) return;
+  const d = t.dataset;
+  if (d.c) { ev.preventDefault(); setProd(d.c, true); return; }
+  if (d.sym) return pick(d.sym);
+  if (d.liq != null) { S.liq = d.liq === "1"; return render(); }
+  if (d.side) { S.side = +d.side; return render(); }
+  if (d.n) { S.n = +d.n; return render(); }
+  if (d.h) { S.h = +d.h; return render(); }
+  if (d.r1) { S.r1Mode = d.r1; return render(); }
+  if (d.r1b) { S.r1Mode = "manual"; S.r1 = S.r0 + (+d.r1b)/100; return render(); }
+  if (d.r1v) { if (S.h >= current().d) return; S.r1Mode = "manual"; S.r1 = +d.r1v; return render(); }
+  if (d.cdi) { S.cdiMode = d.cdi; if (d.cdi === "atual") S.cdi = S.mkt.cdi; return render(); }
+  if (d.ipca) { S.ipcaMode = "impl"; return render(); }
+  if (d.ipcav) { S.ipcaMode = "fixo"; S.ipca = +d.ipcav; return render(); }
+  if (t.id === "btn-refresh") return load();
+});
+function bindRange(id, apply) {
+  $(id).addEventListener("input", e => { apply(+e.target.value); render(); });
+  const inp = $(id + "-in");
+  inp.addEventListener("change", e => { const v = num(e.target.value); if (!isFinite(v)) { inp.setAttribute("aria-invalid","true"); return; } inp.removeAttribute("aria-invalid"); apply(v); render(); });
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+}
+bindRange("r0", v => { S.r0 = v; S.r0Touched = true; });
+bindRange("r1", v => { S.r1 = v; S.r1Mode = "manual"; });
+bindRange("cdi", v => { S.cdi = Math.min(40, Math.max(0, v)); S.cdiMode = "manual"; });
+bindRange("ipca", v => { S.ipca = Math.min(30, Math.max(-5, v)); S.ipcaMode = "fixo"; });
+bindRange("h", v => { S.h = Math.max(1, Math.min(current().d, Math.round(v))); });
+$("n-in").addEventListener("change", e => { const v = Math.round(num(e.target.value)); if (!(v >= 1)) { e.target.setAttribute("aria-invalid","true"); return; } e.target.removeAttribute("aria-invalid"); S.n = Math.min(v, 1e6); render(); });
+$("n-in").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+window.addEventListener("hashchange", () => setProd(location.hash.toLowerCase() === "#dap" ? "DAP" : "DI1"));
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => S.mkt && render(), 150); });
+setInterval(() => { if (document.visibilityState === "visible") load(); }, 5 * 60 * 1000);
+
+S.prod = location.hash.toLowerCase() === "#dap" ? "DAP" : "DI1";
+S.mkt = buildMarket(parseSnap()); S.cdi = S.mkt.cdi; render(true);
+load();
+</script>
+</body>
+</html>
