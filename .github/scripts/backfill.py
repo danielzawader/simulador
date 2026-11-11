@@ -87,9 +87,22 @@ def xmls_de_zip(raw, debug=False, nivel=0):
     return out
 
 
-TAG = lambda t: re.compile(r"<(?:\w+:)?%s>([^<]*)</(?:\w+:)?%s>" % (t, t))
+TAG = lambda t: re.compile(r"<(?:\w+:)?%s(?:\s[^>]*)?>([^<]*)</(?:\w+:)?%s>" % (t, t))
 R_BLOCO = re.compile(r"<(?:\w+:)?PricRpt>(.*?)</(?:\w+:)?PricRpt>", re.S)
 R_TCK, R_TAX, R_PU = TAG("TckrSymb"), TAG("AdjstdQtTax"), TAG("AdjstdQt")
+
+
+def blocos(x):
+    """Só os blocos PricRpt de DI1 e DAP (o XML tem ~130 MB; varrer tudo com regex é lento)."""
+    for alvo in ("<TckrSymb>DI1", "<TckrSymb>DAP"):
+        i = x.find(alvo)
+        while i >= 0:
+            a = x.rfind("<PricRpt", 0, i)
+            b = x.find("</PricRpt>", i)
+            if a < 0 or b < 0:
+                break
+            yield x[a:b]
+            i = x.find(alvo, b)
 
 
 def fonte_pr(dia, debug):
@@ -114,8 +127,12 @@ def fonte_pr(dia, debug):
         if not xs:
             continue
         out = {"DI1": {}, "DAP": {}}
+        mostrou = False
         for x in xs:
-            for b in R_BLOCO.findall(x):
+            for b in blocos(x):
+                if debug and not mostrou and "DI1F" in b:
+                    mostrou = True
+                    log("  bloco DI1:", re.sub(r"\s+", " ", b)[:1500])
                 m = R_TCK.search(b)
                 if not m:
                     continue
@@ -195,7 +212,7 @@ def main():
     ok = falha = 0
     usou = {}
     for i, dia in enumerate(dias):
-        debug = i < 2
+        debug = i < 1
         res, fonte = fonte_pr(dia, debug), "PR"
         if not res:
             res, fonte = fonte_bmf(dia, debug), "BMF"
