@@ -65,18 +65,25 @@ def baixar(url, data=None, timeout=60):
         return r.status, r.headers.get("Content-Type", ""), r.read()
 
 
-def xmls_de_zip(raw):
+def xmls_de_zip(raw, debug=False, nivel=0):
     out = []
     try:
         z = zipfile.ZipFile(io.BytesIO(raw))
-    except zipfile.BadZipFile:
+    except zipfile.BadZipFile as e:
+        if debug:
+            log("  " * nivel, "zip inválido:", e, raw[:60])
         return out
-    for n in z.namelist():
+    nomes = z.namelist()
+    if debug:
+        log("  " * nivel, "zip com", len(nomes), "arquivos:", nomes[:6])
+    for n in nomes:
         b = z.read(n)
-        if n.lower().endswith(".zip"):
-            out += xmls_de_zip(b)
-        elif n.lower().endswith(".xml"):
+        if b[:2] == b"PK":
+            out += xmls_de_zip(b, debug, nivel + 1)
+        elif b.lstrip()[:1] == b"<":
             out.append(b.decode("utf-8", "replace"))
+        elif debug:
+            log("  " * nivel, "ignorado:", n, b[:60])
     return out
 
 
@@ -97,7 +104,13 @@ def fonte_pr(dia, debug):
             continue
         if debug:
             log("  PR", st, ct, len(raw), raw[:80])
-        xs = xmls_de_zip(raw)
+        xs = xmls_de_zip(raw, debug)
+        if debug and xs:
+            x0 = xs[0]
+            i = x0.find("DI1F")
+            log("  xmls:", len(xs), "tam", [len(x) for x in xs[:4]])
+            log("  início:", re.sub(r"\s+", " ", x0[:400]))
+            log("  perto de DI1F:", re.sub(r"\s+", " ", x0[max(0, i - 700):i + 900]) if i >= 0 else "não achou DI1F")
         if not xs:
             continue
         out = {"DI1": {}, "DAP": {}}
