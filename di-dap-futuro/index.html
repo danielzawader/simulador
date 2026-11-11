@@ -26,6 +26,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
 .wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; display: flex; flex-direction: column; gap: 20px; }
 .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; align-self: flex-start; max-width: 100%; overflow-x: auto; }
@@ -133,6 +134,7 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     <a href="https://danielzawader.github.io/simulador-tesouro-direto/">Tesouro Direto</a>
     <a href="#di1" data-c="DI1">DI Futuro</a>
     <a href="#dap" data-c="DAP">DAP Futuro</a>
+    <a href="#inflacao" data-c="INF">Inflação implícita</a>
   </nav>
 
   <header>
@@ -141,7 +143,7 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     <p class="lead" id="lead">Escolha um vencimento negociado na B3, monte a posição em número de contratos e simule o resultado de zerar antes do vencimento: o carrego contra o CDI mais o efeito da variação da taxa.</p>
   </header>
 
-  <section class="card" aria-labelledby="h-pick">
+  <section class="card sec-fut" aria-labelledby="h-pick">
     <div class="headrow">
       <h2 id="h-pick">Vencimento</h2>
       <div class="seg" role="group" aria-label="Filtro de liquidez">
@@ -158,14 +160,14 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     </div>
   </section>
 
-  <section class="card" aria-labelledby="h-curva">
+  <section class="card sec-fut" aria-labelledby="h-curva">
     <h2 id="h-curva">Curva de juros</h2>
     <div class="chart" id="chart"><div class="tip" id="tip" hidden></div></div>
     <div class="legend"><span><i class="sw"></i>Taxa agora</span><span><i class="sw dash"></i>Último ajuste divulgado pela B3</span><span><i class="sw circ"></i>Tamanho = contratos negociados hoje</span></div>
     <div class="tblwrap"><table id="tbl"><thead><tr><th>Contrato</th><th>Taxa</th><th>Var. (bps)</th><th class="c-x">Dias úteis</th><th>Negociados</th><th class="c-x">Em aberto</th></tr></thead><tbody></tbody></table></div>
   </section>
 
-  <section class="card" aria-labelledby="h-pos">
+  <section class="card sec-fut" aria-labelledby="h-pos">
     <h2 id="h-pos">Posição</h2>
     <div class="seg" role="group" aria-label="Lado da posição">
       <button type="button" data-side="-1" aria-pressed="true">Tomado (compra taxa)</button>
@@ -185,7 +187,7 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     <div class="rows" id="pos-rows"></div>
   </section>
 
-  <section class="card" aria-labelledby="h-sim">
+  <section class="card sec-fut" aria-labelledby="h-sim">
     <h2 id="h-sim">Simular a saída</h2>
     <div class="ctrls">
       <div class="ctrl">
@@ -220,16 +222,128 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     <div class="rows" id="sim-rows"></div>
   </section>
 
-  <section class="card" aria-labelledby="h-cen">
+  <section class="card sec-fut" aria-labelledby="h-cen">
     <h2 id="h-cen">Cenários de taxa na saída</h2>
     <p class="note" id="cen-note"></p>
     <div class="tblwrap"><table id="cen"><thead><tr><th>Taxa na saída</th><th>Choque</th><th class="c-x">Carrego</th><th class="c-x">Variação</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
   </section>
 
-  <section class="card" aria-labelledby="h-hist">
+  <section class="card sec-fut" aria-labelledby="h-hist">
     <h2 id="h-hist">Ajustes salvos</h2>
     <p class="note" id="hist-note"></p>
     <div class="tblwrap"><table id="hist"><thead><tr><th>Pregão</th><th>Ajuste B3</th><th>Último negócio</th><th>Negociados</th><th class="c-x">Em aberto</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-ipar" hidden>
+    <h2 id="h-ipar">Operação de inflação implícita</h2>
+    <div class="seg" role="group" aria-label="Direção">
+      <button type="button" data-idir="1" aria-pressed="true">Comprar implícita</button>
+      <button type="button" data-idir="-1" aria-pressed="false">Vender implícita</button>
+    </div>
+    <p class="note" id="idir-note"></p>
+    <div><div class="lbl">DAP (juro real)</div><div class="mats" id="imats-dap" role="group" aria-label="Vencimento do DAP"></div></div>
+    <div><div class="lbl">DI (juro nominal) no prazo mais próximo</div><div class="mats" id="imats-di" role="group" aria-label="Vencimento do DI"></div><p class="note" id="idi-note"></p></div>
+    <div class="facts">
+      <div class="fact"><div class="k">Implícita do par</div><div class="v acc" id="i-pi">—</div><div class="s" id="i-pi-s"></div></div>
+      <div class="fact"><div class="k" id="i-dap-k">DAP</div><div class="v" id="i-dap">—</div><div class="s" id="i-dap-s"></div></div>
+      <div class="fact"><div class="k" id="i-di-k">DI</div><div class="v" id="i-di">—</div><div class="s" id="i-di-s"></div></div>
+    </div>
+    <div class="ctrls">
+      <div class="ctrl">
+        <div class="lblrow"><label for="in-in">Contratos de DAP</label><span class="numin"><input id="in-in" class="w" inputmode="numeric" value="10" aria-label="Número de contratos de DAP"></span></div>
+        <div class="chips" id="in-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lbl">Contratos de DI calculados por</div>
+        <div class="seg" role="group" aria-label="Critério do número de contratos de DI">
+          <button type="button" data-isize="not" aria-pressed="true">Mesmo notional</button>
+          <button type="button" data-isize="dv01" aria-pressed="false">Mesmo DV01</button>
+        </div>
+        <div class="hint" id="isize-hint"></div>
+      </div>
+    </div>
+    <div class="tblwrap"><table id="ilegs"><thead><tr><th>Perna</th><th>Lado</th><th>Contratos</th><th>Notional</th><th class="c-x">PU</th><th>DV01</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-icurva" hidden>
+    <div class="headrow">
+      <h2 id="h-icurva">Inflação implícita por prazo</h2>
+      <div class="seg" role="group" aria-label="Filtro de liquidez">
+        <button type="button" data-liq="1" aria-pressed="true">Líquidos</button>
+        <button type="button" data-liq="0" aria-pressed="false">Todos</button>
+      </div>
+    </div>
+    <div class="chart" id="ichart"><div class="tip" id="itip" hidden></div></div>
+    <div class="legend" id="ilegend"></div>
+    <div><div class="lbl">Comparar com o ajuste salvo de</div><div class="chips" id="ihd-chips"></div></div>
+    <div class="tblwrap"><table id="itbl"><thead><tr><th>DAP</th><th>Juro real</th><th>DI interp.</th><th>Implícita</th><th>Var. (bps)</th><th class="c-x">Carrego/mês</th><th class="c-x">±50 bps por R$ 1 mi</th></tr></thead><tbody></tbody></table></div>
+    <p class="note" id="itbl-note"></p>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-ineu" hidden>
+    <h2 id="h-ineu">A operação é neutra?</h2>
+    <p class="note" id="ineu-lead"></p>
+    <div class="rows" id="ineu-rows"></div>
+    <ul class="prem" id="ineu-txt"></ul>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-icar" hidden>
+    <h2 id="h-icar">Carrego com os preços de agora</h2>
+    <div class="ctrls">
+      <div class="ctrl">
+        <div class="lblrow"><label for="icdi">CDI no período</label><span class="numin"><input id="icdi-in" inputmode="decimal" aria-label="CDI ao ano">%</span></div>
+        <input type="range" id="icdi" min="2" max="25" step="0.05">
+        <div class="chips" id="icdi-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="iipca">IPCA realizado no período</label><span class="numin"><input id="iipca-in" inputmode="decimal" aria-label="IPCA ao ano">%</span></div>
+        <input type="range" id="iipca" min="0" max="15" step="0.05">
+        <div class="chips" id="iipca-chips"></div>
+      </div>
+    </div>
+    <div class="tblwrap"><table id="icar"><thead><tr><th>Carrego</th><th>DAP</th><th>DI</th><th>Operação</th></tr></thead><tbody></tbody></table></div>
+    <p class="note" id="icar-note"></p>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-isim" hidden>
+    <h2 id="h-isim">Simular alta ou queda da implícita</h2>
+    <div class="ctrls">
+      <div class="ctrl">
+        <div class="lblrow"><label for="ih">Ficar posicionado por</label><span class="numin"><input id="ih-in" inputmode="numeric" aria-label="Dias úteis até a saída"><small style="font-size:13px">du</small></span></div>
+        <input type="range" id="ih" min="1" step="1">
+        <div class="hint" id="ih-hint"></div>
+        <div class="chips" id="ih-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="idpi">Implícita na saída</label><span class="numin"><input id="idpi-in" inputmode="decimal" aria-label="Variação da inflação implícita em pontos-base">bps</span></div>
+        <input type="range" id="idpi" min="-200" max="200" step="1">
+        <div class="hint" id="idpi-hint"></div>
+        <div class="chips" id="ibase-chips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="lblrow"><label for="idreal">Juro real (DAP) na saída</label><span class="numin"><input id="idreal-in" inputmode="decimal" aria-label="Variação do juro real em pontos-base">bps</span></div>
+        <input type="range" id="idreal" min="-200" max="200" step="1">
+        <div class="hint" id="idreal-hint"></div>
+      </div>
+    </div>
+    <div class="pnl">
+      <div class="part"><div class="k">Carrego</div><div class="pv" id="io-carry">—</div><div class="pp" id="io-carry-p"></div><div class="kk" id="io-carry-k"></div></div>
+      <div class="part"><div class="k">Variação das taxas</div><div class="pv" id="io-mtm">—</div><div class="pp" id="io-mtm-p"></div><div class="kk" id="io-mtm-k"></div></div>
+      <div class="tot"><div class="k">Resultado da operação na saída</div><div class="tv" id="io-tot">—</div><div class="tp" id="io-tot-p"></div></div>
+    </div>
+    <div class="tblwrap"><table id="iexit"><thead><tr><th>Perna</th><th>Taxa entrada</th><th>Taxa saída</th><th class="c-x">Carrego</th><th class="c-x">Variação</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-icen" hidden>
+    <h2 id="h-icen">Cenários da implícita na saída</h2>
+    <p class="note" id="icen-note"></p>
+    <div class="tblwrap"><table id="icen"><thead><tr><th>Implícita</th><th>Choque</th><th class="c-x">DAP</th><th class="c-x">DI</th><th>Resultado</th><th class="c-x">% notional</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card sec-inf" aria-labelledby="h-ihist" hidden>
+    <h2 id="h-ihist">Histórico da implícita</h2>
+    <p class="note" id="ihist-note"></p>
+    <div class="tblwrap"><table id="ihist"><thead><tr><th>Pregão</th><th>Juro real (DAP)</th><th>DI interp.</th><th>Implícita</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" aria-labelledby="h-prem">
@@ -256,6 +370,7 @@ const PROD = {
   DAP: { nome: "DAP Futuro", sigla: "DAP", eyebrow: "B3 · Futuro de Cupom de IPCA (DAP)", liqVol: 1000, liqOI: 200000, def: "Q30",
     lead: "O DAP negocia o juro real (cupom de IPCA). O notional anda com o IPCA, então o carrego compara juro real + inflação contra o CDI. Escolha um vencimento e simule a saída." }
 };
+PROD.INF = { nome: "Inflação implícita", sigla: "INF", eyebrow: "B3 · DI1 × DAP", liqVol: 0, liqOI: 0, def: "" };
 const MES = "FGHJKMNQUVXZ";
 const MESN = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
@@ -301,7 +416,8 @@ const $ = id => document.getElementById(id);
 const S = {
   prod: "DI1", liq: true, side: -1, n: 10, sel: { DI1: null, DAP: null },
   r0: null, r0Touched: false, h: 63, r1: null, r1Mode: "same", cdi: null, cdiMode: "atual", ipca: 4.5, ipcaMode: "fixo",
-  mkt: null, live: false, ref: null, hist: null
+  mkt: null, live: false, ref: null, hist: null,
+  inf: { dap: null, di: null, diAuto: true, dir: 1, n: 10, size: "not", h: 21, dpi: 0, dreal: 0, base: "same", cdi: null, cdiMode: "atual", ipca: 4.5, ipcaMode: "fixo", hd: null }
 };
 
 function prevBD(d) { let x = addDays(d,-1); while (!isBD(x)) x = addDays(x,-1); return x; }
@@ -398,11 +514,12 @@ function curveRate(c, d) {
   }
   return p[p.length-1].rate;
 }
-function ipcaPR() { // IPCA pro rata: índice do último mês divulgado levado até hoje pela projeção (vale a partir do dia 15 do mês seguinte)
+function ipcaPR(rate) {
+  if (rate == null) rate = S.ipca; // IPCA pro rata: índice do último mês divulgado levado até hoje pela projeção (vale a partir do dia 15 do mês seguinte)
   const m = S.mkt.ipcaMes, y = +m.slice(0,4), mo = +m.slice(4);
   const start = nextBD(new Date(Date.UTC(mo === 12 ? y+1 : y, mo === 12 ? 0 : mo, 15)));
   const n = start < S.mkt.ref ? du(start, S.mkt.ref) : 0;
-  return S.mkt.ipcaIdx * Math.pow(1 + S.ipca/100, n/252);
+  return S.mkt.ipcaIdx * Math.pow(1 + rate/100, n/252);
 }
 
 function current() { const list = S.mkt[S.prod]; return list.find(x => x.sym === S.sel[S.prod]) || null; }
@@ -429,8 +546,13 @@ function calc(r0, r1, h, extra) {
 function setPressed(sel, attr, val) { document.querySelectorAll(sel).forEach(b => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(val)))); }
 
 function render(reset) {
-  const P = PROD[S.prod], list = S.mkt[S.prod];
+  const isInf = S.prod === "INF";
   document.querySelectorAll(".tabs a[data-c]").forEach(a => { if (a.dataset.c === S.prod) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  document.querySelectorAll(".sec-fut").forEach(e => e.hidden = isInf);
+  document.querySelectorAll(".sec-inf").forEach(e => e.hidden = !isInf);
+  $("ipca-ctrl").hidden = S.prod !== "DAP";
+  if (isInf) { renderInf(reset); premissasInf(); return; }
+  const P = PROD[S.prod], list = S.mkt[S.prod];
   document.title = "Simulador " + P.nome;
   $("h-title").textContent = "Simulador " + P.nome; $("e-prod").textContent = P.eyebrow; $("lead").textContent = P.lead;
   $("ipca-ctrl").hidden = S.prod !== "DAP";
@@ -565,6 +687,7 @@ function setNum(id, v, d) { const el = $(id); if (document.activeElement !== el)
 function setRange(id, v, lo, hi) { const el = $(id); el.min = Math.min(lo, v).toFixed(3); el.max = Math.max(hi, v).toFixed(3); el.value = v; setNum(id + "-in", v, 3); }
 
 function premissas() {
+  if (S.prod === "INF") return premissasInf();
   const isDAP = S.prod === "DAP";
   const items = [
     `<b>Preço:</b> PU = 100.000 ÷ (1 + taxa)<sup>du/252</sup>. ${isDAP ? "No DAP cada ponto vale R$ 0,00025 × IPCA pro rata (índice de " + S.mkt.ipcaMes.slice(4) + "/" + S.mkt.ipcaMes.slice(0,4) + " = " + nf(S.mkt.ipcaIdx,2) + ", corrigido pela projeção até hoje)." : "No DI1 cada ponto vale R$ 1,00."} Notional = contratos × PU × valor do ponto.`,
@@ -611,9 +734,226 @@ function drawChart(vis, x) {
 }
 function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2.5 : f < 7.5 ? 5 : 10) * p; }
 
+// =================== Aba Inflação implícita (DI1 × DAP) ===================
+const bei = (n, r) => ((1 + n/100) / (1 + r/100) - 1) * 100; // implícita = (1+nominal)/(1+real) - 1
+function interp(p, d) { // flat-forward em dias úteis sobre pontos {d, r}
+  if (!p.length || !isFinite(d)) return NaN;
+  if (d <= p[0].d) return p[0].r;
+  for (let i = 1; i < p.length; i++) if (d <= p[i].d) {
+    const a = p[i-1], b = p[i], Fa = Math.pow(1 + a.r/100, a.d/252), Fb = Math.pow(1 + b.r/100, b.d/252);
+    return (Math.pow(Fa * Math.pow(Fb/Fa, (d - a.d)/(b.d - a.d)), 252/d) - 1) * 100;
+  }
+  return p[p.length-1].r;
+}
+function ptsOf(list, key) { const a = list.filter(x => isFinite(x[key]) && (x.liq || x.has)).map(x => ({ d: x.d, r: x[key] })); return (a.length >= 2 ? a : list.filter(x => isFinite(x[key])).map(x => ({ d: x.d, r: x[key] }))).sort((a,b) => a.d - b.d); }
+const puOf = (r, d) => 1e5 / Math.pow(1 + r/100, d/252);
+function legCalc(isDap, N, side, r0, r1, h, d0, V0, cdi, ipca) {
+  const PU0 = puOf(r0, d0), not0 = N * PU0 * V0, g = Math.pow(1 + r0/100, h/252);
+  const fC = Math.pow(1 + cdi/100, h/252), fI = isDap ? Math.pow(1 + ipca/100, h/252) : 1;
+  const PU1 = h >= d0 ? 1e5 : puOf(r1, d0 - h);
+  const carry = side * not0 * (fI * g - fC), mtm = side * N * V0 * fI * (PU1 - PU0 * g);
+  return { PU0, PU1, not0, carry, mtm, tot: carry + mtm, dv01: N * V0 * (puOf(r0 - 0.01, d0) - PU0) };
+}
+// Histórico salvo: datas com ajuste de DAP e curva implícita de cada data
+function histDates() {
+  const h = S.mkt.hist; if (!h || !h.DAP) return [];
+  const s = new Set(); Object.values(h.DAP).forEach(o => Object.entries(o).forEach(([dt, r]) => { if (r && r[0] != null) s.add(dt); }));
+  return [...s].sort();
+}
+function histPts(c, D) {
+  const h = S.mkt.hist, o = (h && h[c]) || {}, dD = parseISO(D), out = [];
+  for (const suf in o) { const r = o[suf][D]; if (!r || r[0] == null) continue;
+    const v = h.vencimentos && h.vencimentos[c + suf], mat = v ? parseISO(v) : matFromSym(c, suf), d = du(dD, mat);
+    if (d > 0) out.push({ suf, d, r: r[0] }); }
+  return out.sort((a,b) => a.d - b.d);
+}
+function histCurve(D, sufs) {
+  const di = histPts("DI1", D), dap = histPts("DAP", D);
+  return dap.filter(p => !sufs || sufs.has(p.suf)).map(p => ({ suf: p.suf, t: p.d/252, d: p.d, real: p.r, nom: interp(di, p.d), v: bei(interp(di, p.d), p.r) })).filter(p => isFinite(p.v));
+}
+
+function renderInf(reset) {
+  const I = S.inf, M = S.mkt;
+  document.title = "Simulador Inflação Implícita";
+  $("h-title").textContent = "Inflação implícita DI × DAP"; $("e-prod").textContent = "B3 · DI1 × DAP";
+  $("lead").textContent = "Compare o juro nominal (DI) com o juro real (DAP), monte a operação de compra ou venda da inflação implícita com os contratos certos e simule o carrego e a alta ou queda da implícita.";
+  setPressed("[data-liq]", "liq", S.liq ? 1 : 0); setPressed("[data-idir]", "idir", I.dir); setPressed("[data-isize]", "isize", I.size);
+  if (I.cdi == null || I.cdiMode === "atual") I.cdi = M.cdi;
+
+  const diP = ptsOf(M.DI1, "rate"), diA = ptsOf(M.DI1, "adj");
+  const dapAll = M.DAP.filter(x => isFinite(x.rate));
+  let daps = S.liq ? dapAll.filter(x => x.liq) : dapAll;
+  if (!I.dap || !dapAll.some(x => x.sym === I.dap)) I.dap = (dapAll.find(x => x.sym === "DAP" + PROD.DAP.def) || daps[0] || dapAll[0]).sym;
+  const X = dapAll.find(x => x.sym === I.dap);
+  if (!daps.includes(X)) daps = daps.concat([X]).sort((a,b) => a.d - b.d);
+  let diC = M.DI1.filter(x => (x.liq || x.has) && isFinite(x.rate) && Math.abs(x.d - X.d) <= 380);
+  if (!diC.length) diC = M.DI1.filter(x => isFinite(x.rate));
+  if (I.diAuto || !M.DI1.some(x => x.sym === I.di)) I.di = diC.reduce((a,b) => Math.abs(b.d - X.d) < Math.abs(a.d - X.d) ? b : a).sym;
+  const Y = M.DI1.find(x => x.sym === I.di);
+  if (!diC.includes(Y)) diC = diC.concat([Y]).sort((a,b) => a.d - b.d);
+  if (I.ipcaMode === "impl") I.ipca = bei(Y.rate, X.rate);
+
+  // ---- escolha dos contratos
+  $("imats-dap").innerHTML = daps.map(v => `<button type="button" data-idap="${v.sym}" aria-pressed="${v.sym === X.sym}">${v.suf}<small>${mlabel(v.mat)}</small></button>`).join("");
+  $("imats-di").innerHTML = diC.map(v => `<button type="button" data-idi="${v.sym}" aria-pressed="${v.sym === Y.sym}">${v.suf}<small>${mlabel(v.mat)} · ${v.d >= X.d ? "+" : "−"}${Math.abs(v.d - X.d)} du</small></button>`).join("");
+  const gap = Y.d - X.d;
+  $("idi-note").textContent = `${Y.sym} vence ${fdate(Y.mat)}, ${Math.abs(gap)} dias úteis ${gap >= 0 ? "depois" : "antes"} do ${X.sym} (${fdate(X.mat)}). ${I.diAuto ? "Escolhido automaticamente pelo prazo mais próximo entre os DI com negócio ou liquidez." : "Escolhido por você."} A implícita do par usa as taxas dos dois contratos; na curva acima o DI é interpolado no prazo exato do DAP.`;
+  $("idir-note").textContent = I.dir > 0
+    ? "Comprar implícita = dado em DAP (vendido em taxa de juro real) + tomado em DI (comprado em taxa nominal). Ganha se a inflação implícita subir e, no carrego, se o IPCA realizado superar a implícita."
+    : "Vender implícita = tomado em DAP (comprado em taxa de juro real) + dado em DI (vendido em taxa nominal). Ganha se a inflação implícita cair e, no carrego, se o IPCA realizado ficar abaixo da implícita.";
+
+  // ---- montagem
+  const V = 0.00025 * ipcaPR(I.ipca);
+  const pi0 = bei(Y.rate, X.rate);
+  const nDap1 = puOf(X.rate, X.d) * V, nDi1 = puOf(Y.rate, Y.d);
+  const dvDap1 = V * (puOf(X.rate - 0.01, X.d) - puOf(X.rate, X.d)), dvDi1 = puOf(Y.rate - 0.01, Y.d) - puOf(Y.rate, Y.d);
+  const ratio = I.size === "not" ? nDap1 / nDi1 : dvDap1 / dvDi1;
+  const Nd = I.n, Ni = Math.max(1, Math.round(Nd * ratio));
+  const sD = I.dir, sI = -I.dir;
+  const notD = Nd * nDap1, notI = Ni * nDi1, dvD = Nd * dvDap1, dvI = Ni * dvDi1;
+  $("i-pi").textContent = pct(pi0, 2);
+  const piA = isFinite(X.adj) && isFinite(Y.adj) ? bei(Y.adj, X.adj) : NaN;
+  $("i-pi-s").textContent = isFinite(piA) ? `pelos ajustes: ${pct(piA,2)} · ${sgn((pi0 - piA)*100, 1)} bps` : "";
+  $("i-dap-k").textContent = X.sym; $("i-dap").textContent = pct(X.rate, 3); $("i-dap-s").textContent = `${fdate(X.mat)} · ${nf(X.d,0)} du`;
+  $("i-di-k").textContent = Y.sym; $("i-di").textContent = pct(Y.rate, 3); $("i-di-s").textContent = `${fdate(Y.mat)} · ${nf(Y.d,0)} du`;
+  $("in-in").value = nf(Nd, 0);
+  $("in-chips").innerHTML = [1,5,10,50,100].map(v => `<button type="button" data-in="${v}" class="${v===Nd?'on':''}">${v}</button>`).join("");
+  $("isize-hint").textContent = `${nf(Ni,0)} DI para ${nf(Nd,0)} DAP (razão ${nf(ratio,3)}). ` + (I.size === "not" ? "Mesmo notional: o CDI das duas pernas se anula." : "Mesmo DV01: um choque igual nas duas taxas se anula.");
+  const legRow = (nome, s, n, not, pu, dv, dap) => `<tr><td>${nome}</td><td>${dap ? (s > 0 ? "Dado (vende taxa)" : "Tomado (compra taxa)") : (s > 0 ? "Dado (vende taxa)" : "Tomado (compra taxa)")}</td><td>${nf(n,0)}</td><td>${brl(not)}</td><td class="c-x">${nf(pu,2)}</td><td>${brl(dv,2)}</td></tr>`;
+  $("ilegs").querySelector("tbody").innerHTML = legRow(X.sym, sD, Nd, notD, puOf(X.rate, X.d), dvD, true) + legRow(Y.sym, sI, Ni, notI, puOf(Y.rate, Y.d), dvI, false)
+    + `<tr class="sel"><td>Diferença</td><td></td><td></td><td>${sbrl(notD - notI)} (${sgn((notD/notI - 1)*100, 1)}%)</td><td class="c-x"></td><td>${sbrl(dvD - dvI, 2)}</td></tr>`;
+
+  // ---- curva por prazo
+  const rows = daps.map(x => { const di = interp(diP, x.d), pi = bei(di, x.rate); const dia = interp(diA, x.d); const pa = isFinite(x.adj) && isFinite(dia) ? bei(dia, x.adj) : NaN;
+    const c1m = I.dir * (Math.pow((1 + x.rate/100) * (1 + I.ipca/100), 21/252) - Math.pow(1 + di/100, 21/252)) * 100;
+    const dv1mi = 1e6 * (Math.pow((1 + di/100) / (1 + (di - 0.01)/100), x.d/252) - 1);
+    return { x, di, pi, pa, dv: isFinite(pa) ? (pi - pa) * 100 : null, c1m, p50: 50 * dv1mi }; });
+  const dates = histDates();
+  if (I.hd !== "" && (!I.hd || !dates.includes(I.hd))) I.hd = dates.length ? dates[dates.length-1] : null;
+  $("ihd-chips").innerHTML = dates.length
+    ? dates.slice(-8).map(dt => `<button type="button" data-ihd="${dt}" class="${dt===I.hd?'on':''}">${fdate(parseISO(dt))}</button>`).join("") + `<button type="button" data-ihd="" class="${I.hd===''?'on':''}">Nenhum</button>`
+    : `<span class="hint">Os ajustes começam a ser salvos em 10/11/2026; as curvas anteriores aparecem aqui conforme o histórico cresce.</span>`;
+  const sufs = new Set(daps.map(x => x.suf));
+  const hc = I.hd ? histCurve(I.hd, sufs) : [];
+  drawInfChart(rows, hc, X);
+  $("ilegend").innerHTML = `<span><i class="sw"></i>Agora (último negócio)</span><span><i class="sw dash"></i>Pelos ajustes divulgados</span>` + (hc.length ? `<span><i class="sw" style="background:var(--gold)"></i>Ajuste de ${fdate(parseISO(I.hd))}</span>` : "");
+  $("itbl").querySelector("tbody").innerHTML = rows.map(r => `<tr class="clk${r.x.sym===X.sym?' sel':''}" data-idap="${r.x.sym}"><td>${r.x.suf} <small style="color:var(--muted)">${mlabel(r.x.mat)}</small></td><td>${pct(r.x.rate,3)}</td><td>${pct(r.di,3)}</td><td><b>${pct(r.pi,2)}</b></td><td>${r.dv==null?"—":sgn(r.dv,1)}</td><td class="c-x ${cls(r.c1m*1e4)}">${sgn(r.c1m,3)}%</td><td class="c-x">±${brl(r.p50)}</td></tr>`).join("");
+  $("itbl-note").textContent = `DI interpolado (flat-forward em dias úteis) no vencimento de cada DAP. Carrego/mês: ${I.dir>0?"comprado":"vendido"} em implícita com mesmo notional, IPCA de ${pct(I.ipca)} e taxas paradas, em % do notional. ±50 bps: resultado de uma alta ou queda de 50 bps na implícita (pelo DI) para R$ 1 milhão de notional. Clique numa linha para montar a operação nesse prazo.`;
+
+  // ---- neutralidade
+  const cdiAcc = (c, n) => Math.pow(1 + c/100, n/252) - 1;
+  const exCDI = -(sD * notD + sI * notI) * (cdiAcc(I.cdi + 1, 21) - cdiAcc(I.cdi, 21));
+  const exIPCA = sD * notD * Math.pow(1 + X.rate/100, 21/252) * (cdiAcc(I.ipca + 1, 21) - cdiAcc(I.ipca, 21));
+  const par = -sD * dvD - sI * dvI, viaDI = -sI * dvI, viaDAP = sD * dvD;
+  $("ineu-lead").textContent = `Com ${nf(Nd,0)} ${X.sym} ${sD>0?"dado":"tomado"} e ${nf(Ni,0)} ${Y.sym} ${sI>0?"dado":"tomado"}. Valores em R$ para a posição inteira.`;
+  const nr = (l, v, d=0) => `<div class="row"><span class="l">${l}</span><span class="${cls(v)}">${sbrl(v, d)}</span></div>`;
+  $("ineu-rows").innerHTML =
+    nr("Implícita +1 bp pelo DI (juro nominal sobe)", viaDI, 2) +
+    nr("Implícita +1 bp pelo DAP (juro real cai)", viaDAP, 2) +
+    nr("Juros nominal e real +1 bp juntos (implícita parada)", par, 2) +
+    nr("CDI +1 p.p. por um mês", exCDI) +
+    nr("IPCA realizado +1 p.p. por um mês", exIPCA);
+  const resid = Math.abs(par) / Math.max(Math.abs(viaDI), 1e-9) * 100;
+  $("ineu-txt").innerHTML = [
+    `<b>Na essência, sim.</b> Com o mesmo notional, as duas pernas pagam e recebem CDI sobre o mesmo valor, então o CDI se anula. O que sobra é a diferença entre os carregos, (1 + juro real) × (1 + IPCA realizado) contra (1 + juro nominal), que dá aproximadamente <b>IPCA realizado − inflação implícita</b> sobre o notional, mais a marcação a mercado quando a implícita muda.`,
+    `<b>Choque paralelo:</b> com o mesmo notional, um movimento igual nas duas taxas deixa ${sbrl(par,2)} por bp, ${nf(resid,1)}% do efeito de 1 bp na implícita. Sobra porque o DV01 por real investido depende da taxa e do prazo de cada perna. "Mesmo DV01" zera isso, mas aí o CDI deixa de se anular (${sgn((notD/notI-1)*100,1)}% de diferença de notional).`,
+    `<b>Prazos diferentes:</b> o DI casado vence ${Math.abs(gap)} du ${gap>=0?"depois":"antes"} do DAP; se a curva de juros mudar de inclinação nesse trecho, aparece resultado que não é inflação implícita.`,
+    `<b>Ao longo do tempo:</b> o notional do DAP cresce com o IPCA e o do DI cresce com o CDI, e os DV01 encurtam em ritmos diferentes. Para manter a operação neutra é preciso rebalancear o número de contratos de vez em quando. O arredondamento para contratos inteiros também deixa um resíduo.`
+  ].map(t => `<li>${t}</li>`).join("");
+
+  // ---- carrego
+  $("icdi").value = I.cdi; setNum("icdi-in", I.cdi, 2);
+  $("icdi-chips").innerHTML = `<button type="button" data-icdi="atual" class="${I.cdiMode==='atual'?'on':''}">CDI atual ${pct(M.cdi,2)}</button>`;
+  $("iipca").value = I.ipca; setNum("iipca-in", I.ipca, 2);
+  $("iipca-chips").innerHTML = `<button type="button" data-iipca="impl" class="${I.ipcaMode==='impl'?'on':''}">Igual à implícita (${pct(pi0,2)})</button>` + [3.5,4.5,5.5].map(v => `<button type="button" data-iipcav="${v}" class="${I.ipcaMode==='fixo'&&Math.abs(I.ipca-v)<1e-9?'on':''}">${pct(v,1)}</button>`).join("");
+  const carryAt = n => { const a = legCalc(true, Nd, sD, X.rate, X.rate, n, X.d, V, I.cdi, I.ipca), b = legCalc(false, Ni, sI, Y.rate, Y.rate, n, Y.d, 1, I.cdi, I.ipca); return [a.carry, b.carry, a.carry + b.carry]; };
+  const cRow = (l, arr) => `<tr><td>${l}</td>${arr.map((v,i) => `<td class="${cls(v)}">${sbrl(v, Math.abs(v) < 100 ? 2 : 0)}<br><small>${sgn(v / (i===1?notI:notD) * 100, 4)}%</small></td>`).join("")}</tr>`;
+  $("icar").querySelector("tbody").innerHTML = cRow("Por dia útil", carryAt(1)) + cRow("Por mês (21 du)", carryAt(21)) + cRow(`No período (${nf(I.h,0)} du)`, carryAt(I.h));
+  $("icar-note").textContent = `Taxas paradas, CDI de ${pct(I.cdi)} e IPCA de ${pct(I.ipca)}. Percentuais sobre o notional de cada perna; na operação, sobre o notional do DAP (${brl(notD)}). Cada perna sozinha carrega taxa contra CDI; somadas, o CDI se anula e sobra IPCA realizado contra implícita${I.ipcaMode==='impl'?" (com IPCA igual à implícita, o carrego da operação fica perto de zero)":""}.`;
+
+  // ---- simulação de saída
+  const hMax = Math.min(X.d, Y.d);
+  if (I.h > hMax) I.h = hMax; if (I.h < 1) I.h = 1;
+  $("ih").max = hMax; $("ih").value = I.h; $("ih-in").value = I.h;
+  $("ih-hint").textContent = `Saída em ${fdate(addBD(M.ref, I.h))} · ${nf(I.h/21,1)} meses`;
+  $("ih-chips").innerHTML = [[1,"1 dia"],[21,"1 mês"],[63,"3 meses"],[126,"6 meses"],[252,"1 ano"]].filter(([v]) => v <= hMax).map(([v,l]) => `<button type="button" data-ih="${v}" class="${v===I.h?'on':''}">${l}</button>`).join("");
+  const rD0 = I.base === "roll" ? interp(ptsOf(M.DAP, "rate"), X.d - I.h) : X.rate;
+  const rI0 = I.base === "roll" ? interp(diP, Y.d - I.h) : Y.rate;
+  const piB = bei(rI0, rD0);
+  const rD1 = rD0 + I.dreal/100, pi1 = piB + I.dpi/100, rI1 = ((1 + rD1/100) * (1 + pi1/100) - 1) * 100;
+  $("idpi").value = I.dpi; setNum("idpi-in", I.dpi, 0); $("idreal").value = I.dreal; setNum("idreal-in", I.dreal, 0);
+  $("idpi-hint").textContent = `${pct(pi0,2)} hoje → ${pct(pi1,2)} na saída` + (I.base === "roll" ? " (partindo da curva de hoje no prazo restante)" : "");
+  $("ibase-chips").innerHTML = `<button type="button" data-ibase="same" class="${I.base==='same'?'on':''}">Partir das taxas de hoje</button><button type="button" data-ibase="roll" class="${I.base==='roll'?'on':''}">Curva de hoje no prazo restante</button>` + [-50,-25,25,50].map(b => `<button type="button" data-idpib="${b}">${b>0?"+":"−"}${Math.abs(b)} bps</button>`).join("");
+  $("idreal-hint").textContent = `DAP ${pct(X.rate,3)} → ${pct(rD1,3)}; DI ${pct(Y.rate,3)} → ${pct(rI1,3)}. Deixe em 0 para a implícita mudar só pelo juro nominal.`;
+  const sim = (dpi) => { const p1 = piB + dpi/100, r1 = ((1 + rD1/100) * (1 + p1/100) - 1) * 100;
+    const a = legCalc(true, Nd, sD, X.rate, rD1, I.h, X.d, V, I.cdi, I.ipca), b = legCalc(false, Ni, sI, Y.rate, r1, I.h, Y.d, 1, I.cdi, I.ipca);
+    return { a, b, p1, r1, carry: a.carry + b.carry, mtm: a.mtm + b.mtm, tot: a.tot + b.tot }; };
+  const R = sim(I.dpi);
+  const pr = v => sgn(v / notD * 100, 3) + "% do notional";
+  out("io-carry", R.carry); $("io-carry-p").textContent = pr(R.carry); $("io-carry-k").textContent = `IPCA ${pct(I.ipca)} contra implícita de ${pct(pi0)} por ${nf(I.h,0)} du`;
+  out("io-mtm", R.mtm); $("io-mtm-p").textContent = pr(R.mtm); $("io-mtm-k").textContent = `Implícita ${sgn((pi1 - pi0)*100,1)} bps; juro real ${sgn((rD1 - X.rate)*100,1)} bps`;
+  $("io-tot").textContent = sbrl(R.tot); $("io-tot-p").textContent = pr(R.tot);
+  const er = (nm, r0, r1, c) => `<tr><td>${nm}</td><td>${pct(r0,3)}</td><td>${pct(r1,3)}</td><td class="c-x ${cls(c.carry)}">${sbrl(c.carry)}</td><td class="c-x ${cls(c.mtm)}">${sbrl(c.mtm)}</td><td class="${cls(c.tot)}"><b>${sbrl(c.tot)}</b></td></tr>`;
+  $("iexit").querySelector("tbody").innerHTML = er(X.sym, X.rate, rD1, R.a) + er(Y.sym, Y.rate, R.r1, R.b);
+
+  // ---- cenários
+  $("icen-note").textContent = `Saindo em ${nf(I.h,0)} du, juro real ${sgn(I.dreal,0)} bps, CDI ${pct(I.cdi)} e IPCA ${pct(I.ipca)}. Clique numa linha para simular.`;
+  $("icen").querySelector("tbody").innerHTML = [-100,-50,-25,0,25,50,100].map(b => { const c = sim(b), on = b === I.dpi;
+    return `<tr class="clk${on?' sel':''}" data-idpiv="${b}"><td>${pct(c.p1,2)}</td><td>${b===0?"0":sgn(b,0)} bps</td><td class="c-x ${cls(c.a.tot)}">${sbrl(c.a.tot)}</td><td class="c-x ${cls(c.b.tot)}">${sbrl(c.b.tot)}</td><td class="${cls(c.tot)}"><b>${sbrl(c.tot)}</b></td><td class="c-x">${sgn(c.tot/notD*100,2)}%</td></tr>`; }).join("");
+
+  // ---- histórico do contrato escolhido
+  const hrows = [{ dt: null, real: X.rate, nom: interp(diP, X.d), v: bei(interp(diP, X.d), X.rate) }].concat(dates.slice().reverse().map(dt => { const c = histCurve(dt).find(p => p.suf === X.suf); return c ? { dt, real: c.real, nom: c.nom, v: c.v } : null; }).filter(Boolean));
+  $("ihist-note").textContent = `${X.sym}: implícita pelos ajustes oficiais salvos (DI interpolado no prazo do DAP em cada data).` + (dates.length < 2 ? " O histórico começou em 10/11/2026 e cresce a cada pregão." : "");
+  $("ihist").querySelector("tbody").innerHTML = hrows.slice(0, 31).map(r => `<tr${r.dt?'':' class="sel"'}><td>${r.dt ? fdate(parseISO(r.dt)) : "Agora"}</td><td>${pct(r.real,3)}</td><td>${pct(r.nom,3)}</td><td><b>${pct(r.v,2)}</b></td></tr>`).join("");
+}
+
+function drawInfChart(rows, hc, X) {
+  const el = $("ichart"), W = Math.max(280, el.clientWidth || 640), H = Math.round(Math.min(320, Math.max(230, W * 0.5)));
+  const m = { l: 46, r: 12, t: 12, b: 28 };
+  const now = rows.map(r => ({ t: r.x.d/252, v: r.pi, r })), adj = rows.filter(r => isFinite(r.pa)).map(r => ({ t: r.x.d/252, v: r.pa }));
+  const all = now.concat(adj, hc).map(p => p.v).filter(isFinite);
+  if (!all.length) { el.querySelectorAll("svg").forEach(n => n.remove()); return; }
+  let y0 = Math.min(...all), y1 = Math.max(...all); const pad = Math.max(0.1, (y1-y0)*0.12); y0 -= pad; y1 += pad;
+  const x1 = Math.max(...now.map(p => p.t), ...hc.map(p => p.t)) * 1.03;
+  const Xs = v => m.l + v/x1 * (W - m.l - m.r), Ys = v => m.t + (y1 - v)/(y1 - y0) * (H - m.t - m.b);
+  const step = niceStep((y1-y0)/4); const ticks = []; for (let v = Math.ceil(y0/step)*step; v <= y1; v += step) ticks.push(v);
+  const xs = x1 > 12 ? 5 : x1 > 5 ? 2 : x1 > 2 ? 1 : 0.5; const xt = []; for (let v = 0; v <= x1; v += xs) xt.push(v);
+  const path = a => a.filter(p => isFinite(p.v)).map((p,i) => (i?"L":"M") + Xs(p.t).toFixed(1) + "," + Ys(p.v).toFixed(1)).join("");
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Inflação implícita por prazo">`;
+  s += ticks.map(v => `<line x1="${m.l}" x2="${W-m.r}" y1="${Ys(v)}" y2="${Ys(v)}" stroke="var(--line)"/><text x="${m.l-6}" y="${Ys(v)+4}" text-anchor="end">${nf(v, step < 0.1 ? 2 : 1)}%</text>`).join("");
+  s += xt.map(v => `<text x="${Xs(v)}" y="${H-8}" text-anchor="middle">${v===0?"":nf(v, v%1?1:0)+"a"}</text>`).join("");
+  if (hc.length) s += `<path d="${path(hc)}" fill="none" stroke="var(--gold)" stroke-width="1.8"/>`;
+  s += `<path d="${path(adj)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  s += `<path d="${path(now)}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
+  s += now.map(p => { const on = p.r.x.sym === X.sym; return `<circle cx="${Xs(p.t)}" cy="${Ys(p.v)}" r="${on?6:3.5}" fill="${on?'var(--accent)':'var(--surface)'}" stroke="var(--accent)" stroke-width="${on?2:1.5}"/>`; }).join("");
+  s += `<line id="ihair" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/></svg>`;
+  el.querySelectorAll("svg").forEach(n => n.remove()); el.insertAdjacentHTML("afterbegin", s);
+  const svg = el.querySelector("svg"), tip = $("itip"), hair = svg.querySelector("#ihair");
+  const near = ev => { const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width; let best = null, bd = 1e9; now.forEach(p => { const d = Math.abs(Xs(p.t) - px); if (d < bd) { bd = d; best = p; } }); return { p: best, r }; };
+  svg.onpointermove = ev => { const { p, r } = near(ev); if (!p) return; const cx = Xs(p.t);
+    hair.setAttribute("x1", cx); hair.setAttribute("x2", cx); hair.setAttribute("visibility", "visible");
+    const h = hc.find(q => q.suf === p.r.x.suf);
+    tip.hidden = false; tip.innerHTML = `<b>${p.r.x.sym}</b> · implícita ${pct(p.v,2)}<div class="d">real ${pct(p.r.x.rate,3)} · DI ${pct(p.r.di,3)}${isFinite(p.r.pa) ? " · ajustes " + pct(p.r.pa,2) : ""}${h ? " · " + fdate(parseISO(S.inf.hd)) + " " + pct(h.v,2) : ""}</div>`;
+    const tx = cx * r.width / W, tw = tip.offsetWidth; tip.style.transform = `translate(${Math.min(Math.max(0, tx - tw/2), r.width - tw)}px, ${Math.max(0, Ys(p.v) * r.height / H - 58)}px)`; };
+  svg.onpointerleave = () => { tip.hidden = true; hair.setAttribute("visibility", "hidden"); };
+  svg.onclick = ev => { const { p } = near(ev); if (p) { S.inf.dap = p.r.x.sym; S.inf.diAuto = true; render(); } };
+}
+function premissasInf() {
+  const items = [
+    `<b>Inflação implícita:</b> (1 + taxa do DI) ÷ (1 + taxa do DAP) − 1, com as duas taxas em base 252 dias úteis. Na curva, o DI é interpolado (flat-forward em dias úteis) no vencimento exato de cada DAP; na operação, usa-se o DI de vencimento mais próximo, porque é ele que se negocia.`,
+    `<b>Contratos:</b> PU = 100.000 ÷ (1 + taxa)<sup>du/252</sup>. O ponto do DI vale R$ 1; o do DAP vale R$ 0,00025 × IPCA pro rata (índice de ${S.mkt.ipcaMes.slice(4)}/${S.mkt.ipcaMes.slice(0,4)} = ${nf(S.mkt.ipcaIdx,2)}). "Mesmo notional" iguala contratos × PU × valor do ponto; "mesmo DV01" iguala o resultado de 1 bp nas duas pernas.`,
+    `<b>Comprar implícita</b> = dado em DAP + tomado em DI. Carrego de cada perna: o dado recebe a taxa contratada (no DAP, juro real mais IPCA realizado) e paga o CDI; o tomado, o contrário. Com o mesmo notional o CDI se anula e o carrego da operação fica ≈ IPCA realizado − implícita.`,
+    `<b>Simulação:</b> na saída, o juro real do DAP muda pelo valor escolhido e o DI é recalculado para a implícita ficar no nível escolhido: (1 + DI) = (1 + juro real) × (1 + implícita). Resultado = soma dos ajustes diários das duas pernas (sem reinvestir os ajustes).`,
+    `<b>Histórico:</b> sai dos ajustes oficiais da B3 que o GitHub salva todo dia útil desde 10/11/2026. A coluna "Var." compara com os ajustes divulgados que a B3 mostra agora.`,
+    `<b>Fica de fora:</b> margem, corretagem, emolumentos, IR e o custo de rebalancear. É uma simulação, não recomendação.`
+  ];
+  $("prem").innerHTML = items.map(t => `<li>${t}</li>`).join("");
+  $("foot").textContent = `Fontes: B3 (DI1 e DAP), Banco Central (CDI), IBGE (IPCA). Cotações buscadas pelo seu navegador ao abrir a página e a cada 5 minutos.`;
+}
+
 // ---------- Eventos ----------
 function pick(sym) { S.sel[S.prod] = sym; S.r0Touched = false; if (S.r1Mode !== "roll") S.r1Mode = "same"; render(true); }
-function setProd(c, push) { if (!PROD[c]) return; S.prod = c; S.r0Touched = false; S.r1Mode = "same"; if (push) history.replaceState(null, "", "#" + c.toLowerCase()); render(true); }
+function setProd(c, push) { if (!PROD[c]) return; S.prod = c; S.r0Touched = false; S.r1Mode = "same"; if (push) history.replaceState(null, "", "#" + (c === "INF" ? "inflacao" : c.toLowerCase())); render(true); }
 document.addEventListener("click", ev => {
   const t = ev.target.closest("button, a[data-c], tr.clk"); if (!t) return;
   const d = t.dataset;
@@ -629,6 +969,20 @@ document.addEventListener("click", ev => {
   if (d.cdi) { S.cdiMode = d.cdi; if (d.cdi === "atual") S.cdi = S.mkt.cdi; return render(); }
   if (d.ipca) { S.ipcaMode = "impl"; return render(); }
   if (d.ipcav) { S.ipcaMode = "fixo"; S.ipca = +d.ipcav; return render(); }
+  const I = S.inf;
+  if (d.idir) { I.dir = +d.idir; return render(); }
+  if (d.isize) { I.size = d.isize; return render(); }
+  if (d.idap) { I.dap = d.idap; I.diAuto = true; return render(); }
+  if (d.idi) { I.di = d.idi; I.diAuto = false; return render(); }
+  if (d.in) { I.n = +d.in; return render(); }
+  if (d.ih) { I.h = +d.ih; return render(); }
+  if (d.ihd != null) { I.hd = d.ihd; return render(); }
+  if (d.icdi) { I.cdiMode = "atual"; I.cdi = S.mkt.cdi; return render(); }
+  if (d.iipca) { I.ipcaMode = "impl"; return render(); }
+  if (d.iipcav) { I.ipcaMode = "fixo"; I.ipca = +d.iipcav; return render(); }
+  if (d.ibase) { I.base = d.ibase; return render(); }
+  if (d.idpib) { I.dpi = +d.idpib; return render(); }
+  if (d.idpiv != null) { I.dpi = +d.idpiv; return render(); }
   if (t.id === "btn-refresh") return load();
 });
 function bindRange(id, apply) {
@@ -642,13 +996,21 @@ bindRange("r1", v => { S.r1 = v; S.r1Mode = "manual"; });
 bindRange("cdi", v => { S.cdi = Math.min(40, Math.max(0, v)); S.cdiMode = "manual"; });
 bindRange("ipca", v => { S.ipca = Math.min(30, Math.max(-5, v)); S.ipcaMode = "fixo"; });
 bindRange("h", v => { S.h = Math.max(1, Math.min(current().d, Math.round(v))); });
+bindRange("icdi", v => { S.inf.cdi = Math.min(40, Math.max(0, v)); S.inf.cdiMode = "manual"; });
+bindRange("iipca", v => { S.inf.ipca = Math.min(30, Math.max(-5, v)); S.inf.ipcaMode = "fixo"; });
+bindRange("ih", v => { S.inf.h = Math.max(1, Math.round(v)); });
+bindRange("idpi", v => { S.inf.dpi = Math.max(-500, Math.min(500, Math.round(v))); });
+bindRange("idreal", v => { S.inf.dreal = Math.max(-500, Math.min(500, Math.round(v))); });
+$("in-in").addEventListener("change", e => { const v = Math.round(num(e.target.value)); if (!(v >= 1)) { e.target.setAttribute("aria-invalid","true"); return; } e.target.removeAttribute("aria-invalid"); S.inf.n = Math.min(v, 1e5); render(); });
+$("in-in").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
 $("n-in").addEventListener("change", e => { const v = Math.round(num(e.target.value)); if (!(v >= 1)) { e.target.setAttribute("aria-invalid","true"); return; } e.target.removeAttribute("aria-invalid"); S.n = Math.min(v, 1e6); render(); });
 $("n-in").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
-window.addEventListener("hashchange", () => setProd(location.hash.toLowerCase() === "#dap" ? "DAP" : "DI1"));
+const prodFromHash = () => { const h = location.hash.toLowerCase(); return h === "#dap" ? "DAP" : h === "#inflacao" ? "INF" : "DI1"; };
+window.addEventListener("hashchange", () => setProd(prodFromHash()));
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => S.mkt && render(), 150); });
 setInterval(() => { if (document.visibilityState === "visible") load(); }, 5 * 60 * 1000);
 
-S.prod = location.hash.toLowerCase() === "#dap" ? "DAP" : "DI1";
+S.prod = prodFromHash();
 S.mkt = buildMarket(parseSnap(), null); S.cdi = S.mkt.cdi; render(true);
 load();
 </script>
