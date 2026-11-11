@@ -1,12 +1,19 @@
 name: Ajustes B3 (DI1 e DAP)
 
-# Horários em UTC (Brasília = UTC-3):
-#  11:00 UTC = 08:00 -> grava o ajuste oficial do pregão anterior
-#  22:00 UTC = 19:00 -> grava o fechamento do dia (último negócio, negociados, em aberto)
+# Horários em UTC (Brasília = UTC-3). Vários horários porque o GitHub às vezes
+# descarta execuções agendadas; rodar de novo só regrava os mesmos números.
+#  Antes das 18:30 de Brasília -> grava o ajuste oficial do pregão anterior
+#    10:23, 12:41, 15:07 e 19:53 UTC = 07:23, 09:41, 12:07 e 16:53
+#  Depois das 18:30 -> grava o fechamento do dia (último negócio, negociados, em aberto)
+#    22:17 e 23:43 UTC = 19:17 e 20:43
 on:
   schedule:
-    - cron: "0 11 * * 1-5"
-    - cron: "0 22 * * 1-5"
+    - cron: "23 10 * * 1-5"
+    - cron: "41 12 * * 1-5"
+    - cron: "7 15 * * 1-5"
+    - cron: "53 19 * * 1-5"
+    - cron: "17 22 * * 1-5"
+    - cron: "43 23 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +27,7 @@ jobs:
   salvar:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Baixar e gravar ajustes
         run: python3 .github/scripts/ajustes.py
       - name: Commit
@@ -30,4 +37,5 @@ jobs:
           git add di-dap-futuro/ajustes.json
           if git diff --cached --quiet; then echo "sem mudanças"; exit 0; fi
           git commit -m "Ajustes B3 $(TZ=America/Sao_Paulo date '+%Y-%m-%d %H:%M')"
+          git pull --rebase
           git push
