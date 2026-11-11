@@ -80,8 +80,8 @@ def xmls_de_zip(raw, debug=False, nivel=0):
         b = z.read(n)
         if b[:2] == b"PK":
             out += xmls_de_zip(b, debug, nivel + 1)
-        elif b.lstrip()[:1] == b"<":
-            out.append(b.decode("utf-8", "replace"))
+        elif b.lstrip(b"\xef\xbb\xbf \r\n\t")[:1] == b"<":
+            out.append(b.decode("utf-8-sig", "replace"))
         elif debug:
             log("  " * nivel, "ignorado:", n, b[:60])
     return out
@@ -106,7 +106,7 @@ def fonte_pr(dia, debug):
             log("  PR", st, ct, len(raw), raw[:80])
         xs = xmls_de_zip(raw, debug)
         if debug and xs:
-            x0 = xs[0]
+            x0 = next((x for x in xs if "DI1F" in x), xs[0])
             i = x0.find("DI1F")
             log("  xmls:", len(xs), "tam", [len(x) for x in xs[:4]])
             log("  início:", re.sub(r"\s+", " ", x0[:400]))
