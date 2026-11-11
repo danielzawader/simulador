@@ -836,8 +836,12 @@ function renderInf(reset) {
   const dates = histDates();
   if (I.hd !== "" && (!I.hd || !dates.includes(I.hd))) I.hd = dates.length ? dates[dates.length-1] : null;
   $("ihd-chips").innerHTML = dates.length
-    ? dates.slice(-8).map(dt => `<button type="button" data-ihd="${dt}" class="${dt===I.hd?'on':''}">${fdate(parseISO(dt))}</button>`).join("") + `<button type="button" data-ihd="" class="${I.hd===''?'on':''}">Nenhum</button>`
-    : `<span class="hint">Os ajustes começam a ser salvos em 10/11/2026; as curvas anteriores aparecem aqui conforme o histórico cresce.</span>`;
+    ? (() => { // atalhos: último pregão salvo e cerca de 1 semana, 1 mês, 3, 6 e 12 meses atrás
+        const last = parseISO(dates[dates.length-1]), alvo = [[0,"Último"],[7,"1 semana"],[30,"1 mês"],[91,"3 meses"],[182,"6 meses"],[365,"1 ano"]];
+        const seen = new Set();
+        return alvo.map(([dd, nome]) => { const t = addDays(last, -dd); const dt = dates.filter(x => parseISO(x) <= t).pop(); if (!dt || seen.has(dt)) return ""; seen.add(dt);
+          return `<button type="button" data-ihd="${dt}" class="${dt===I.hd?'on':''}">${nome} · ${fdate(parseISO(dt)).slice(0,5)}${dd>=182?"/"+dt.slice(2,4):""}</button>`; }).join(""); })() + `<button type="button" data-ihd="" class="${I.hd===''?'on':''}">Nenhum</button>`
+    : `<span class="hint">Ainda não há ajustes salvos para comparar.</span>`;
   const sufs = new Set(daps.map(x => x.suf));
   const hc = I.hd ? histCurve(I.hd, sufs) : [];
   // série diária do par: ajustes oficiais salvos + o último negócio de agora
@@ -854,7 +858,7 @@ function renderInf(reset) {
   if (I.view === "par") {
     drawPairChart(ser, X, Y);
     $("ilegend").innerHTML = `<span><i class="sw"></i>${X.sym} × ${Y.sym}</span><span><i class="sw dash"></i>${X.sym} × DI interpolado no prazo do DAP</span>`;
-    $("iview-note").textContent = `Um ponto por pregão, pelos ajustes oficiais da B3 salvos no GitHub; o último ponto${ser.some(p => p.agora) ? " (vazado) é o último negócio de agora" : ""}. ` + (dates.length < 15 ? `Os ajustes começaram a ser salvos em 10/11/2026, então a série ainda é curta e cresce um ponto por pregão.` : "") + ` Para comparar vencimentos num mesmo dia, use "Curva por prazo".`;
+    $("iview-note").textContent = `Um ponto por pregão, pelos ajustes oficiais da B3 salvos no GitHub; o último ponto${ser.some(p => p.agora) ? " (vazado) é o último negócio de agora" : ""}. ` + (dates.length < 15 ? `A série ainda é curta e cresce um ponto por pregão.` : `${dates.length} pregões desde ${fdate(parseISO(dates[0]))}.`) + ` Para comparar vencimentos num mesmo dia, use "Curva por prazo".`;
   } else {
     drawInfChart(rows, hc, X);
     $("ilegend").innerHTML = `<span><i class="sw"></i>Agora (último negócio)</span><span><i class="sw dash"></i>Pelos ajustes divulgados</span>` + (hc.length ? `<span><i class="sw" style="background:var(--gold)"></i>Ajuste de ${fdate(parseISO(I.hd))}</span>` : "");
@@ -926,7 +930,7 @@ function renderInf(reset) {
 
   // ---- histórico do contrato escolhido
   $("ih-dap").textContent = X.sym; $("ih-di").textContent = Y.sym;
-  $("ihist-note").textContent = `${X.sym} × ${Y.sym} pelos ajustes oficiais salvos; a última coluna usa o DI interpolado no prazo exato do DAP.` + (dates.length < 2 ? " O histórico começou em 10/11/2026 e cresce a cada pregão." : "");
+  $("ihist-note").textContent = `${X.sym} × ${Y.sym} pelos ajustes oficiais salvos; a última coluna usa o DI interpolado no prazo exato do DAP.` + (dates.length < 2 ? " A série cresce um ponto por pregão." : "");
   const f3 = v => isFinite(v) ? pct(v,3) : "—", f2 = v => isFinite(v) ? pct(v,2) : "—";
   $("ihist").querySelector("tbody").innerHTML = ser.slice().reverse().slice(0, 31).map(r => `<tr${r.agora?' class="sel"':''}><td>${r.agora ? "Agora" : fdate(parseISO(r.dt))}</td><td>${f3(r.dap)}</td><td>${f3(r.di)}</td><td><b>${f2(r.v)}</b></td><td class="c-x">${f2(r.vi)}</td></tr>`).join("");
 }
@@ -974,14 +978,15 @@ function drawPairChart(ser, X, Y) {
   const Xs = v => m.l + (v - t0)/(t1 - t0) * (W - m.l - m.r), Ys = v => m.t + (y1 - v)/(y1 - y0) * (H - m.t - m.b);
   const step = niceStep((y1-y0)/4); const ticks = []; for (let v = Math.ceil(y0/step)*step; v <= y1; v += step) ticks.push(v);
   let xt = []; if (pts.length <= 8) xt = pts.map(p => p.t); else { const nX = 6; for (let i = 0; i < nX; i++) xt.push(pts[Math.round((pts.length - 1) * i / (nX - 1))].t); }
-  const lab = t => { const d = new Date(t); return String(d.getUTCDate()).padStart(2,"0") + "/" + String(d.getUTCMonth()+1).padStart(2,"0"); };
+  const longo = t1 - t0 > 100 * 864e5;
+  const lab = t => { const d = new Date(t); return longo ? MESN[d.getUTCMonth()] + "/" + String(d.getUTCFullYear()).slice(2) : String(d.getUTCDate()).padStart(2,"0") + "/" + String(d.getUTCMonth()+1).padStart(2,"0"); };
   const path = k => pts.filter(p => isFinite(p[k])).map((p,i) => (i?"L":"M") + Xs(p.t).toFixed(1) + "," + Ys(p[k]).toFixed(1)).join("");
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução diária da inflação implícita ${X.sym} × ${Y.sym}">`;
   s += ticks.map(v => `<line x1="${m.l}" x2="${W-m.r}" y1="${Ys(v)}" y2="${Ys(v)}" stroke="var(--line)"/><text x="${m.l-6}" y="${Ys(v)+4}" text-anchor="end">${nf(v, step < 0.1 ? 2 : 1)}%</text>`).join("");
   s += xt.map(t => `<text x="${Xs(t)}" y="${H-8}" text-anchor="middle">${lab(t)}</text>`).join("");
   s += `<path d="${path("vi")}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
   s += `<path d="${path("v")}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
-  s += pts.filter(p => isFinite(p.v)).map(p => `<circle cx="${Xs(p.t)}" cy="${Ys(p.v)}" r="${p.agora?5.5:4}" fill="${p.agora?'var(--surface)':'var(--accent)'}" stroke="var(--accent)" stroke-width="2"/>`).join("");
+  s += pts.filter(p => isFinite(p.v) && (p.agora || pts.length <= 40)).map(p => `<circle cx="${Xs(p.t)}" cy="${Ys(p.v)}" r="${p.agora?5.5:4}" fill="${p.agora?'var(--surface)':'var(--accent)'}" stroke="var(--accent)" stroke-width="2"/>`).join("");
   s += `<line id="ihair" x1="0" x2="0" y1="${m.t}" y2="${H-m.b}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/></svg>`;
   el.insertAdjacentHTML("afterbegin", s);
   const svg = el.querySelector("svg"), tip = $("itip"), hair = svg.querySelector("#ihair");
@@ -999,7 +1004,7 @@ function premissasInf() {
     `<b>Contratos:</b> PU = 100.000 ÷ (1 + taxa)<sup>du/252</sup>. O ponto do DI vale R$ 1; o do DAP vale R$ 0,00025 × IPCA pro rata (índice de ${S.mkt.ipcaMes.slice(4)}/${S.mkt.ipcaMes.slice(0,4)} = ${nf(S.mkt.ipcaIdx,2)}). "Mesmo notional" iguala contratos × PU × valor do ponto; "mesmo DV01" iguala o resultado de 1 bp nas duas pernas.`,
     `<b>Comprar implícita</b> = dado em DAP + tomado em DI. Carrego de cada perna: o dado recebe a taxa contratada (no DAP, juro real mais IPCA realizado) e paga o CDI; o tomado, o contrário. Com o mesmo notional o CDI se anula e o carrego da operação fica ≈ IPCA realizado − implícita.`,
     `<b>Simulação:</b> na saída, o juro real do DAP muda pelo valor escolhido e o DI é recalculado para a implícita ficar no nível escolhido: (1 + DI) = (1 + juro real) × (1 + implícita). Resultado = soma dos ajustes diários das duas pernas (sem reinvestir os ajustes).`,
-    `<b>Histórico:</b> sai dos ajustes oficiais da B3 que o GitHub salva todo dia útil desde 10/11/2026. A coluna "Var." compara com os ajustes divulgados que a B3 mostra agora.`,
+    `<b>Histórico:</b> ajustes oficiais da B3 (taxa de ajuste de cada contrato). De nov/2025 a 09/11/2026 vieram dos arquivos de preços da B3 (BVBG.086); desde 10/11/2026 o GitHub salva todo dia útil. A coluna "Var." compara com os ajustes divulgados que a B3 mostra agora.`,
     `<b>Fica de fora:</b> margem, corretagem, emolumentos, IR e o custo de rebalancear. É uma simulação, não recomendação.`
   ];
   $("prem").innerHTML = items.map(t => `<li>${t}</li>`).join("");
