@@ -161,7 +161,7 @@ ul.prem b { color: var(--ink); font-weight: 600; }
   <section class="card" aria-labelledby="h-curva">
     <h2 id="h-curva">Curva de juros</h2>
     <div class="chart" id="chart"><div class="tip" id="tip" hidden></div></div>
-    <div class="legend"><span><i class="sw"></i>Taxa agora</span><span><i class="sw dash"></i>Ajuste anterior</span><span><i class="sw circ"></i>Tamanho = contratos negociados hoje</span></div>
+    <div class="legend"><span><i class="sw"></i>Taxa agora</span><span><i class="sw dash"></i>Último ajuste divulgado pela B3</span><span><i class="sw circ"></i>Tamanho = contratos negociados hoje</span></div>
     <div class="tblwrap"><table id="tbl"><thead><tr><th>Contrato</th><th>Taxa</th><th>Var. (bps)</th><th class="c-x">Dias úteis</th><th>Negociados</th><th class="c-x">Em aberto</th></tr></thead><tbody></tbody></table></div>
   </section>
 
@@ -224,6 +224,12 @@ ul.prem b { color: var(--ink); font-weight: 600; }
     <h2 id="h-cen">Cenários de taxa na saída</h2>
     <p class="note" id="cen-note"></p>
     <div class="tblwrap"><table id="cen"><thead><tr><th>Taxa na saída</th><th>Choque</th><th class="c-x">Carrego</th><th class="c-x">Variação</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-hist">
+    <h2 id="h-hist">Ajustes salvos</h2>
+    <p class="note" id="hist-note"></p>
+    <div class="tblwrap"><table id="hist"><thead><tr><th>Pregão</th><th>Ajuste B3</th><th>Último negócio</th><th>Negociados</th><th class="c-x">Em aberto</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" aria-labelledby="h-prem">
@@ -295,17 +301,38 @@ const $ = id => document.getElementById(id);
 const S = {
   prod: "DI1", liq: true, side: -1, n: 10, sel: { DI1: null, DAP: null },
   r0: null, r0Touched: false, h: 63, r1: null, r1Mode: "same", cdi: null, cdiMode: "atual", ipca: 4.5, ipcaMode: "fixo",
-  mkt: null, live: false, ref: null
+  mkt: null, live: false, ref: null, hist: null
 };
 
-function buildMarket(raw) { // raw: { DI1:[{suf,mat,adj,cur,vol,oi}], DAP:[...], ts, cdi, ... }
+function prevBD(d) { let x = addDays(d,-1); while (!isBD(x)) x = addDays(x,-1); return x; }
+// Estado do pregão a partir da hora da consulta (horário de Brasília):
+// aberto  -> o campo "ajuste anterior" é do pregão anterior (certo)
+// noite   -> depois das 18:30 a B3 troca o campo pelo ajuste do dia em horário variável (decide pelo histórico)
+// fechado -> antes da abertura ou dia sem pregão: o campo é do último pregão encerrado (certo)
+function sessao(ts) {
+  const now = ts ? new Date(ts) : new Date();
+  const d = ts ? parseISO(ts.slice(0,10)) : todaySP();
+  const hm = ts ? +ts.slice(11,13) * 60 + +ts.slice(14,16) : now.getHours() * 60 + now.getMinutes();
+  if (isBD(d) && hm >= 540 && hm <= 1110) return { estado: "aberto", S: d };
+  if (isBD(d) && hm > 1110) return { estado: "noite", S: d };
+  return { estado: "fechado", S: prevBD(d) };
+}
+function buildMarket(raw, hist) { // raw: { DI1:[{suf,mat,adj,cur,vol,oi}], DAP:[...], ts, cdi, ... }
   const ref = nextBD(todaySP());
-  const out = { ts: raw.ts, cdi: raw.cdi, cdiData: raw.cdiData, selic: raw.selic, ipcaIdx: raw.ipcaIdx, ipcaMes: raw.ipcaMes, ref };
+  const ses = sessao(raw.ts), antS = iso(prevBD(ses.S));
+  const out = { ts: raw.ts, cdi: raw.cdi, cdiData: raw.cdiData, selic: raw.selic, ipcaIdx: raw.ipcaIdx, ipcaMes: raw.ipcaMes, ref, ses, hist };
   for (const c of ["DI1","DAP"]) {
     out[c] = raw[c].filter(x => x.mat > ref && (isFinite(x.adj) || isFinite(x.cur))).map(x => {
       const rate = isFinite(x.cur) ? x.cur : x.adj;
       const d = du(ref, x.mat);
-      return { ...x, sym: c + x.suf, rate, has: isFinite(x.cur), d, pu: 1e5 / Math.pow(1 + rate/100, d/252), var: isFinite(x.cur) && isFinite(x.adj) ? (x.cur - x.adj)*100 : null };
+      const H = (hist && hist[c] && hist[c][x.suf]) || {};
+      const hp = H[antS] && isFinite(H[antS][0]) ? H[antS][0] : null; // ajuste salvo do pregão anterior ao atual
+      let adjData = null, base = null;
+      if (ses.estado === "aberto") { adjData = antS; base = x.adj; }
+      else if (ses.estado === "fechado") { adjData = iso(ses.S); base = hp; }
+      else if (hp != null) { adjData = Math.abs(x.adj - hp) < 1e-9 ? antS : iso(ses.S); base = hp; }
+      const v = isFinite(x.cur) && base != null && isFinite(base) ? (x.cur - base) * 100 : null;
+      return { ...x, sym: c + x.suf, rate, has: isFinite(x.cur), d, pu: 1e5 / Math.pow(1 + rate/100, d/252), var: v, adjData, hist: H };
     }).filter(x => x.d > 0).sort((a,b) => a.d - b.d);
     const P = PROD[c];
     out[c].forEach(x => x.liq = (x.vol || 0) >= P.liqVol || (x.oi || 0) >= P.liqOI);
@@ -343,13 +370,14 @@ async function fetchLive() {
 
 async function load() {
   $("live-txt").textContent = "atualizando…";
-  try { S.mkt = buildMarket(await fetchLive()); S.live = true; }
-  catch (e) { if (!S.mkt || !S.live) { S.mkt = buildMarket(parseSnap()); S.live = false; } }
+  const hist = await fetch("ajustes.json", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (hist) S.hist = hist;
+  try { S.mkt = buildMarket(await fetchLive(), S.hist); S.live = true; }
+  catch (e) { if (!S.mkt || !S.live) { S.mkt = buildMarket(parseSnap(), S.hist); S.live = false; } }
   const ts = S.mkt.ts ? new Date(S.mkt.ts) : null;
   const tstr = ts ? fdate(new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()))) + " " + String(ts.getHours()).padStart(2,"0") + ":" + String(ts.getMinutes()).padStart(2,"0") : "";
   $("live-dot").className = "dot " + (S.live ? "on" : "off");
-  let aberto = false;
-  if (ts) { const hm = ts.getHours() * 60 + ts.getMinutes(); aberto = isBD(new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()))) && hm >= 540 && hm <= 1110; }
+  const aberto = S.mkt.ses.estado === "aberto";
   $("live-txt").textContent = S.live
     ? (aberto ? "pregão aberto · B3 consultada às " + tstr.slice(-5) + " (atraso ~15 min)" : "pregão fechado · últimos negócios do dia · consultado em " + tstr)
     : "cópia de " + tstr + " (B3 não respondeu)";
@@ -430,7 +458,9 @@ function render(reset) {
 
   // fatos
   $("c-taxa").textContent = pct(x.rate, 3);
-  $("c-taxa-s").innerHTML = x.has ? `ajuste ant. ${pct(x.adj,3)} · ${sgn(x.var,1)} bps no dia` : `ajuste anterior (sem negócio hoje)`;
+  const dd = s => s.slice(8,10) + "/" + s.slice(5,7);
+  const ajTxt = x.adjData ? `ajuste de ${dd(x.adjData)}: ${pct(x.adj,3)}` : `último ajuste divulgado: ${pct(x.adj,3)}`;
+  $("c-taxa-s").textContent = (x.has ? "" : "sem negócio · ") + ajTxt + (x.var != null ? ` · ${sgn(x.var,1)} bps no dia` : "");
   $("c-pu").textContent = nf(x.pu, 2);
   $("c-pu-s").textContent = S.prod === "DAP" ? `× R$ ${nf(0.00025*ipcaPR(),4)} por ponto` : "R$ 1,00 por ponto";
   $("c-venc").textContent = fdate(x.mat);
@@ -508,7 +538,18 @@ function render(reset) {
   $("tbl").querySelector("tbody").innerHTML = vis.map(v => `<tr class="clk${v.sym===x.sym?' sel':''}" data-sym="${v.sym}"><td>${v.sym}</td><td>${pct(v.rate,3)}</td><td>${v.var==null?"—":sgn(v.var,1)}</td><td class="c-x">${nf(v.d,0)}</td><td>${nf(v.vol||0,0)}</td><td class="c-x">${nf(v.oi||0,0)}</td></tr>`).join("");
 
   drawChart(vis, x);
+  histTable(x);
   premissas();
+}
+function histTable(x) {
+  const datas = Object.keys(x.hist || {}).sort().reverse();
+  const tb = $("hist").querySelector("tbody");
+  $("hist").hidden = !datas.length;
+  $("hist-note").textContent = datas.length
+    ? `${x.sym}: ${datas.length} pregão(ões) salvos. Todo dia útil o GitHub grava às 8h o ajuste oficial do pregão anterior e às 19h o fechamento do dia.`
+    : (S.mkt.hist ? `Ainda não há ajustes salvos de ${x.sym}. Eles são gravados todo dia útil: às 8h o ajuste oficial do pregão anterior e às 19h o fechamento.` : "O histórico de ajustes fica disponível no site publicado no GitHub.");
+  const f = (v, k) => v == null ? "—" : k ? nf(v,0) : pct(v,3);
+  tb.innerHTML = datas.slice(0, 30).map(dt => { const r = x.hist[dt]; return `<tr><td>${fdate(parseISO(dt))}</td><td><b>${f(r[0])}</b></td><td>${f(r[1])}</td><td>${f(r[2],1)}</td><td class="c-x">${f(r[3],1)}</td></tr>`; }).join("");
 }
 function implInfl(d) { const di = curveRate("DI1", d), dap = curveRate("DAP", d); return ((1+di/100)/(1+dap/100) - 1) * 100; }
 function carryText(R) {
@@ -528,7 +569,7 @@ function premissas() {
   const items = [
     `<b>Preço:</b> PU = 100.000 ÷ (1 + taxa)<sup>du/252</sup>. ${isDAP ? "No DAP cada ponto vale R$ 0,00025 × IPCA pro rata (índice de " + S.mkt.ipcaMes.slice(4) + "/" + S.mkt.ipcaMes.slice(0,4) + " = " + nf(S.mkt.ipcaIdx,2) + ", corrigido pela projeção até hoje)." : "No DI1 cada ponto vale R$ 1,00."} Notional = contratos × PU × valor do ponto.`,
     `<b>Prazo:</b> dias úteis da data de referência (${fdate(S.mkt.ref)}, inclusive) até o vencimento (exclusive), pelo calendário de feriados nacionais que a B3 usa (inclui Carnaval, Sexta-feira Santa, Corpus Christi e 20/11). Vencimento ${isDAP ? "no dia 15 do mês (ou dia útil seguinte)" : "no 1º dia útil do mês"}.`,
-    `<b>Taxa agora:</b> último negócio na B3; sem negócio no dia, vale o ajuste anterior. Os "líquidos" são os vencimentos com ${nf(PROD[S.prod].liqVol,0)}+ contratos negociados hoje ou ${nf(PROD[S.prod].liqOI,0)}+ em aberto, para valer também logo na abertura.`,
+    `<b>Taxa agora:</b> último negócio na B3; sem negócio no dia, vale o último ajuste divulgado. A variação do dia é contra o ajuste oficial do pregão anterior. Depois das 18:30 a B3 troca o "ajuste anterior" pelo do dia em horário variável; a página usa os ajustes salvos para dizer de que pregão é o número mostrado. Os "líquidos" são os vencimentos com ${nf(PROD[S.prod].liqVol,0)}+ contratos negociados hoje ou ${nf(PROD[S.prod].liqOI,0)}+ em aberto, para valer também logo na abertura.`,
     `<b>Ajuste diário:</b> a posição é corrigida todo dia pelo CDI${isDAP ? " e pelo IPCA pro rata" : ""}. Somando os ajustes até a saída, o resultado de quem está dado (comprado em PU) = PU de saída × ponto${isDAP ? " × inflação do período" : ""} − PU de entrada × ponto × CDI acumulado. Tomado é o inverso.`,
     `<b>Carrego:</b> o resultado se a taxa não mudar até a saída. Positivo para o dado quando ${isDAP ? "juro real + IPCA supera" : "a taxa contratada supera"} o CDI do período; para o tomado, o contrário. O CDI padrão é o atual (${pct(S.mkt.cdi,2)}, BCB, ${S.mkt.cdiData}); "implícito na curva" usa o DI futuro para o mesmo prazo.`,
     `<b>Fica de fora:</b> reinvestimento ou custo de financiar os ajustes diários, margem, corretagem, emolumentos e IR. É uma simulação, não recomendação.`
@@ -608,7 +649,7 @@ let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTime
 setInterval(() => { if (document.visibilityState === "visible") load(); }, 5 * 60 * 1000);
 
 S.prod = location.hash.toLowerCase() === "#dap" ? "DAP" : "DI1";
-S.mkt = buildMarket(parseSnap()); S.cdi = S.mkt.cdi; render(true);
+S.mkt = buildMarket(parseSnap(), null); S.cdi = S.mkt.cdi; render(true);
 load();
 </script>
 </body>
