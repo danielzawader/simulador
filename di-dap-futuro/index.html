@@ -873,13 +873,15 @@ function renderInf(reset) {
   const exIPCA = sD * notD * Math.pow(1 + X.rate/100, 21/252) * (cdiAcc(I.ipca + 1, 21) - cdiAcc(I.ipca, 21));
   const par = -sD * dvD - sI * dvI, viaDI = -sI * dvI, viaDAP = sD * dvD;
   $("ineu-lead").textContent = `Com ${nf(Nd,0)} ${X.sym} ${sD>0?"dado":"tomado"} e ${nf(Ni,0)} ${Y.sym} ${sI>0?"dado":"tomado"}. Valores em R$ para a posição inteira.`;
-  const nr = (l, v, d=0) => `<div class="row"><span class="l">${l}</span><span class="${cls(v)}">${sbrl(v, d)}</span></div>`;
+  const nr = (l, v, d, ex) => `<div class="row" style="flex-wrap:wrap"><span class="l">${l}</span><span class="${cls(v)}">${sbrl(v, d)}</span><span class="hint" style="flex-basis:100%;white-space:normal;text-align:left">${ex}</span></div>`;
+  const vend = I.dir < 0, eqDI = Math.abs(par) / dvDi1;
+  const ipcaMes = (cdiAcc(I.ipca + 1, 21) - cdiAcc(I.ipca, 21)) * 100; // quanto +1 p.p. ao ano muda o IPCA de um mês (em p.p.)
   $("ineu-rows").innerHTML =
-    nr("Implícita +1 bp pelo DI (juro nominal sobe)", viaDI, 2) +
-    nr("Implícita +1 bp pelo DAP (juro real cai)", viaDAP, 2) +
-    nr("Juros nominal e real +1 bp juntos (implícita parada)", par, 2) +
-    nr("CDI +1 p.p. por um mês", exCDI) +
-    nr("IPCA realizado +1 p.p. por um mês", exIPCA);
+    nr("Implícita +1 bp pelo DI (juro nominal sobe)", viaDI, 2, `O DI sobe 1 bp e o DAP fica parado, então a implícita sobe 1 bp. É o DV01 da perna de DI. Ex.: implícita ${vend ? "cai" : "sobe"} 25 bps pelo DI → ${sbrl(-25 * viaDI * (vend ? 1 : -1))}.`) +
+    nr("Implícita +1 bp pelo DAP (juro real cai)", viaDAP, 2, `O juro real cai 1 bp e o DI fica parado, então a implícita também sobe 1 bp. É o DV01 da perna de DAP. Ex.: implícita ${vend ? "cai" : "sobe"} 25 bps pelo DAP → ${sbrl(-25 * viaDAP * (vend ? 1 : -1))}.`) +
+    nr("Juros nominal e real +1 bp juntos (implícita parada)", par, 2, `As duas taxas sobem juntas e a implícita não muda. O resultado vem só da diferença entre os DV01 das pernas (${brl(dvD,0)} × ${brl(dvI,0)}). É o pedaço da operação que ainda aposta na direção dos juros: equivale a ${nf(eqDI,1)} DI ${Math.abs(par) < 0.005 ? "" : par > 0 ? "tomados" : "dados"} sozinhos. Ex.: o Copom surpreende e a curva toda sobe 50 bps com a implícita parada → ${sbrl(50 * par)}.`) +
+    nr("CDI +1 p.p. por um mês", exCDI, 0, `Cada perna paga ou recebe CDI sobre o seu notional. Com notionais iguais o CDI se anula; sobra só a diferença (${sbrl(notD - notI)}). Ex.: o CDI médio fica 1 p.p. acima do previsto por 6 meses → ${sbrl(exCDI * 6)}.`) +
+    nr("IPCA realizado +1 p.p. por um mês", exIPCA, 0, `O notional do DAP é corrigido pelo IPCA dia a dia. +1 p.p. ao ano durante um mês equivale ao IPCA do mês vir ${nf(ipcaMes, 2)} p.p. acima (${nf(cdiAcc(I.ipca + 1, 21) * 100, 2)}% em vez de ${nf(cdiAcc(I.ipca, 21) * 100, 2)}%). ${vend ? "Quem vende implícita está tomado em DAP e perde quando o IPCA vem acima." : "Quem compra implícita está dado em DAP e ganha quando o IPCA vem acima."} Ex.: IPCA de um mês 0,10 p.p. acima do previsto → ${sbrl(exIPCA * 0.10 / ipcaMes)}.`);
   const resid = Math.abs(par) / Math.max(Math.abs(viaDI), 1e-9) * 100;
   $("ineu-txt").innerHTML = [
     `<b>Na essência, sim.</b> Com o mesmo notional, as duas pernas pagam e recebem CDI sobre o mesmo valor, então o CDI se anula. O que sobra é a diferença entre os carregos, (1 + juro real) × (1 + IPCA realizado) contra (1 + juro nominal), que dá aproximadamente <b>IPCA realizado − inflação implícita</b> sobre o notional, mais a marcação a mercado quando a implícita muda.`,
