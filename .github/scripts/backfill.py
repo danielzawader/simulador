@@ -4,6 +4,8 @@
 Uso: python3 backfill.py AAAA-MM-DD AAAA-MM-DD   (início e fim, inclusive)
 Fontes, nesta ordem:
   1. Arquivo "PR" (Price Report, BVBG.086) da pesquisa por pregão da B3: traz o ajuste em taxa (AdjstdQtTax) e em PU (AdjstdQt).
+     Só entram os blocos do próprio pregão (TradDt): o arquivo de um dia pode trazer publicações de outra data (o PR260731.zip
+     traz também uma de 15/12/2020, que gravou em 31/07/2026 contratos vencidos como DI1F21 a DI1F25).
   2. Página antiga "Ajustes do pregão" (www2.bmf.com.br), que traz o ajuste em PU; a taxa é recalculada com
      PU = 100.000 / (1 + taxa)^(du/252), du do pregão (inclusive) ao vencimento (exclusive).
 Dias que já têm ajuste salvo são pulados. Grava um resumo em di-dap-futuro/backfill_log.txt.
@@ -90,6 +92,7 @@ def xmls_de_zip(raw, debug=False, nivel=0):
 TAG = lambda t: re.compile(r"<(?:\w+:)?%s(?:\s[^>]*)?>([^<]*)</(?:\w+:)?%s>" % (t, t))
 R_BLOCO = re.compile(r"<(?:\w+:)?PricRpt>(.*?)</(?:\w+:)?PricRpt>", re.S)
 R_TCK, R_TAX, R_PU = TAG("TckrSymb"), TAG("AdjstdQtTax"), TAG("AdjstdQt")
+R_DT = re.compile(r"<(?:\w+:)?TradDt>\s*<(?:\w+:)?Dt>([^<]*)</")
 
 
 def blocos(x):
@@ -130,6 +133,9 @@ def fonte_pr(dia, debug):
         mostrou = False
         for x in xs:
             for b in blocos(x):
+                td = R_DT.search(b)
+                if not td or td.group(1).strip() != dia.isoformat():
+                    continue  # bloco de outro pregão (ex.: a publicação de 15/12/2020 dentro do PR260731.zip)
                 if debug and not mostrou and "DI1F" in b:
                     mostrou = True
                     log("  bloco DI1:", re.sub(r"\s+", " ", b)[:1500])
