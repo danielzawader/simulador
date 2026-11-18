@@ -1,11 +1,10 @@
 name: Ajustes B3 (DI1 e DAP)
 
-# Horários em UTC (Brasília = UTC-3). Vários horários porque o GitHub às vezes
-# descarta execuções agendadas; rodar de novo só regrava os mesmos números.
-#  Antes das 18:30 de Brasília -> grava o ajuste oficial do pregão anterior
-#    10:23, 12:41, 15:07 e 19:53 UTC = 07:23, 09:41, 12:07 e 16:53
-#  Depois das 18:30 -> grava o fechamento do dia (último negócio, negociados, em aberto)
-#    22:17 e 23:43 UTC = 19:17 e 20:43
+# Horários em UTC (Brasília = UTC-3). Vários horários porque o GitHub às vezes descarta execuções agendadas e atrasa as
+# outras (em nov/2026, de 4 a 10 h); rodar de novo só regrava os mesmos números.
+#  Toda execução -> ajuste oficial dos últimos pregões pelo arquivo PR da B3 (só os que ainda não vieram completos)
+#  Depois das 18:30 de Brasília -> também o fechamento do dia (último negócio, negociados, em aberto)
+#    10:23, 12:41, 15:07, 19:53, 22:17 e 23:43 UTC = 07:23, 09:41, 12:07, 16:53, 19:17 e 20:43
 on:
   schedule:
     - cron: "23 10 * * 1-5"
@@ -26,6 +25,7 @@ concurrency:
 jobs:
   salvar:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: Baixar e gravar ajustes
